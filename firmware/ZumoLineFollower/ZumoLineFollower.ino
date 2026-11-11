@@ -19,10 +19,13 @@
     1. Switch ON. Hello beep + flicker. The robot is in mode 1 (Safe): 1 beep/blink.
     2. CHOOSE MODE: short press = next mode. The robot beeps and blinks the
        mode number (1 = Safe, 2 = Fast).
-    3. CALIBRATE: put the robot across the line (beside the start, not on the
-       start line). Hold the button about 1 second, then let go. After 1 s the
-       robot spins left and right for about 4 s, then beeps and flickers.
+    3. CALIBRATE: put the robot ON the line, facing along it, so the line runs
+       under the middle of the sensor bar (beside the start, not on the start
+       line). Hold the button about 1 second, then let go. After 1 s the robot
+       spins left and right for about 4 s, then beeps and flickers.
        LED stays on = ready.
+       If a sensor did not see both white and black, you hear a low double tone
+       and see 3 long blinks: calibration refused, LED stays off. Try again.
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
@@ -69,6 +72,9 @@ const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
+// After calibrating, every sensor's black value must be at least this much
+// higher than its white value, or the calibration is refused (no line seen).
+const unsigned int MIN_CALIBRATION_RANGE = 300;
 const unsigned long LONG_PRESS_MS = 800;  // hold longer than this = calibrate
 
 // =====================================================================
@@ -156,11 +162,42 @@ void calibrate()
     delay(20);
   }
   motors.setSpeeds(0, 0);
-  calibrated = true;
-
   printCalibration();
-  buzzer.play(">g32>>c32");
-  flickerLed();
+
+  // Check that every sensor saw both white and black.
+  calibrated = true;
+  for (int i = 0; i < NUM_SENSORS; i++)
+  {
+    unsigned int white = sensors.calibratedMinimumOn[i];
+    unsigned int black = sensors.calibratedMaximumOn[i];
+    if (black < white + MIN_CALIBRATION_RANGE)
+    {
+      calibrated = false;
+      Serial.print(F("Sensor "));
+      Serial.print(i);
+      Serial.println(F(" did not see both white and black."));
+    }
+  }
+
+  if (calibrated)
+  {
+    Serial.println(F("Calibration OK. LED on = ready."));
+    buzzer.play(">g32>>c32");
+    flickerLed();
+  }
+  else
+  {
+    // Low "error" tone + long LED blinks. Not ready: calibrate again.
+    Serial.println(F("Calibration FAILED: put the robot on the line, facing along it, and hold the button again."));
+    buzzer.play("<c8<c8");
+    for (int i = 0; i < 3; i++)
+    {
+      digitalWrite(LED_PIN, HIGH);
+      delay(400);
+      digitalWrite(LED_PIN, LOW);
+      delay(200);
+    }
+  }
 }
 
 // Prints what each sensor learned (helps when tuning SENSOR_TIMEOUT_US).

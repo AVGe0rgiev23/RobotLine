@@ -20,7 +20,7 @@ Our line-following robot for the Robo League 2026-2027 (Varna): a Pololu Zumo (A
 - `firmware/SetupCheck/` — tests the buzzer, LED, sensors and motors
 - `firmware/ZumoLineFollower/` — the race sketch. How to use it is at the top of the file:
   1. Switch on → short presses choose the mode (1 beep = Safe, 2 = Fast)
-  2. Robot across the line, hold the button ~1 s → it calibrates (spins ~4 s), LED on = ready
+  2. Robot on the line, facing along it, hold the button ~1 s → it calibrates (spins ~4 s), LED on = ready
   3. On the start line: press and release → it starts the instant you let go
   4. Press during a run = stop. Reset button = choose a mode again
 - [docs/logbook.md](docs/logbook.md) — write every tuning test here
