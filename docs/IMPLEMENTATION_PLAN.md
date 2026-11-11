@@ -2,7 +2,9 @@
 
 As of 11 Nov 2026. Race: **Saturday 14 Nov 2026**. Companion to [PLAN.md](PLAN.md) and [BUILD_PLAN.md](BUILD_PLAN.md).
 
-This is the plan for the code, not the code itself. We build one Arduino sketch in small milestones. Each milestone has a test the robot must pass before the next one starts, and each passing version is committed to this repo.
+The race sketch now exists: `firmware/ZumoLineFollower/ZumoLineFollower.ino` covers milestones M4–M7 (it compiles for the Uno with ZumoShield 2.1.0). What remains is testing and tuning (M4–M8 tests below).
+
+This section started as the plan for the code. We build one Arduino sketch in small milestones. Each milestone has a test the robot must pass before the next one starts, and each passing version is committed to this repo.
 
 ## 1. Starting point: Pololu's LineFollower example
 
