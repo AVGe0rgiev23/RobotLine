@@ -29,7 +29,9 @@
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
-    6. STOP (testing only): press the button while it drives. It stops, beeps,
+    6. STOP: it stops by itself if it cannot find the line for 2 s (end of the
+       line, after the finish, or picked up). For testing you can also
+       press the button while it drives. Either way it stops, beeps,
        and is ready again (LED on). Short press = run again with the same
        calibration. Hold 1 s = calibrate again.
     7. CHANGE MODE after calibrating: press the Reset button, choose the mode
@@ -71,6 +73,14 @@ const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
+// If the line stays lost this long, the robot stops and beeps
+// (end of a test strip, after the finish, or picked up).
+const unsigned long LOST_STOP_MS = 2000;
+
+// Motor balance. If the robot curves on a straight because one side is faster,
+// lower the FASTER side a little (e.g. RIGHT = 95 if it curves to the left).
+const int LEFT_MOTOR_PERCENT = 100;
+const int RIGHT_MOTOR_PERCENT = 100;
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
 // After calibrating, every sensor's black value must be at least this much
 // higher than its white value, or the calibration is refused (no line seen).
@@ -135,6 +145,13 @@ unsigned long waitForPressDuration()
   unsigned long pressedAt = millis();
   button.waitForRelease();
   return millis() - pressedAt;
+}
+
+// Sets both motors, applying the motor balance percentages.
+void drive(int left, int right)
+{
+  motors.setSpeeds((int)((long)left * LEFT_MOTOR_PERCENT / 100),
+                   (int)((long)right * RIGHT_MOTOR_PERCENT / 100));
 }
 
 int clampSpeed(long speed, int lowest, int highest)
@@ -224,9 +241,20 @@ void race()
   lastError = 0;
   unsigned long loops = 0;
   unsigned long startedAt = millis();
+  unsigned long lostSince = 0;   // when the line was lost (0 = not lost)
+  bool stoppedLost = false;
 
   while (true)
   {
+    loops++;
+
+    // Stop button (for testing at home).
+    if (button.getSingleDebouncedPress())
+    {
+      motors.setSpeeds(0, 0);
+      break;
+    }
+
     // 1. Read the sensors. position: 0 (line under left sensor) .. 5000 (right).
     int position = sensors.readLine(sensorValues);
 
@@ -239,18 +267,29 @@ void race()
       if (sensorValues[i] < WHITE_THRESHOLD) whiteCount++;
     }
 
+    if (whiteCount == NUM_SENSORS)
+    {
+      // 4. Line lost: spin towards the side where we saw it last.
+      //    If it stays lost for LOST_STOP_MS, stop (end of the line).
+      if (lostSince == 0) lostSince = millis();
+      if (millis() - lostSince > LOST_STOP_MS)
+      {
+        motors.setSpeeds(0, 0);
+        stoppedLost = true;
+        break;
+      }
+      if (lastError < 0)
+        drive(-LOST_SPIN_SPEED, LOST_SPIN_SPEED);  // line was left
+      else
+        drive(LOST_SPIN_SPEED, -LOST_SPIN_SPEED);  // line was right
+      continue;
+    }
+    lostSince = 0;  // line seen again
+
     if (blackCount >= CROSSING_MIN_BLACK)
     {
       // 3. Crossing: drive straight, do not steer.
-      motors.setSpeeds(m.maxSpeed, m.maxSpeed);
-    }
-    else if (whiteCount == NUM_SENSORS)
-    {
-      // 4. Line lost: spin towards the side where we saw it last. Never stop.
-      if (lastError < 0)
-        motors.setSpeeds(-LOST_SPIN_SPEED, LOST_SPIN_SPEED);  // line was left
-      else
-        motors.setSpeeds(LOST_SPIN_SPEED, -LOST_SPIN_SPEED);  // line was right
+      drive(m.maxSpeed, m.maxSpeed);
     }
     else
     {
@@ -266,20 +305,13 @@ void race()
       // 7. Motor speeds. The inside track may go backwards (down to -reverseLimit).
       int left = clampSpeed(base + correction, -m.reverseLimit, m.maxSpeed);
       int right = clampSpeed(base - correction, -m.reverseLimit, m.maxSpeed);
-      motors.setSpeeds(left, right);
-    }
-
-    loops++;
-
-    // Stop button (for testing at home).
-    if (button.getSingleDebouncedPress())
-    {
-      motors.setSpeeds(0, 0);
-      break;
+      drive(left, right);
     }
   }
 
   // After the run: report how fast the loop was (helps with SENSOR_TIMEOUT_US).
+  if (stoppedLost)
+    Serial.println(F("Stopped: line lost for too long (end of the line?)."));
   unsigned long ms = millis() - startedAt;
   Serial.print(F("Run stopped after "));
   Serial.print(ms);
