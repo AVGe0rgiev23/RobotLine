@@ -13,13 +13,16 @@
     - if the line is lost, spins towards the side where it was last seen
     - adjustable sensor timeout for a faster control loop
 
-  HOW TO USE (the "user button" is the small button next to the power switch):
-    1. Switch ON. Hello beep. The robot is in mode 1 (Safe): 1 beep.
-    2. CHOOSE MODE: short press = next mode. The robot beeps the mode number
-       (1 beep = Safe, 2 beeps = Fast).
+  HOW TO USE (the "user button" is the small button next to the power switch).
+  Every beep is also shown on the yellow LED, so it works without the buzzer:
+  a fast flicker = "hello/done", slow blinks = the mode number.
+    1. Switch ON. Hello beep + flicker. The robot is in mode 1 (Safe): 1 beep/blink.
+    2. CHOOSE MODE: short press = next mode. The robot beeps and blinks the
+       mode number (1 = Safe, 2 = Fast).
     3. CALIBRATE: put the robot across the line (beside the start, not on the
        start line). Hold the button about 1 second, then let go. After 1 s the
-       robot spins left and right for about 4 s, then beeps. LED on = ready.
+       robot spins left and right for about 4 s, then beeps and flickers.
+       LED stays on = ready.
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
@@ -90,14 +93,31 @@ bool calibrated = false;
 // Small helpers
 // =====================================================================
 
-// Beeps n times (used to show the mode number).
+// Beeps AND blinks the yellow LED n times (shows the mode number).
+// The LED blinks work even if the buzzer is silent.
 void beepTimes(int n)
 {
+  digitalWrite(LED_PIN, LOW);
+  delay(300);
   for (int i = 0; i < n; i++)
   {
-    buzzer.playNote(NOTE_C(6), 100, 15);
-    while (buzzer.isPlaying()) { }
-    delay(120);
+    digitalWrite(LED_PIN, HIGH);
+    buzzer.playNote(NOTE_C(6), 150, 15);
+    delay(250);
+    digitalWrite(LED_PIN, LOW);
+    delay(250);
+  }
+}
+
+// Fast flicker of the LED: "done" signal that works without the buzzer.
+void flickerLed()
+{
+  for (int i = 0; i < 6; i++)
+  {
+    digitalWrite(LED_PIN, HIGH);
+    delay(50);
+    digitalWrite(LED_PIN, LOW);
+    delay(50);
   }
 }
 
@@ -140,6 +160,7 @@ void calibrate()
 
   printCalibration();
   buzzer.play(">g32>>c32");
+  flickerLed();
 }
 
 // Prints what each sensor learned (helps when tuning SENSOR_TIMEOUT_US).
@@ -230,6 +251,7 @@ void race()
 
   button.waitForRelease();
   buzzer.play(">g32>>c32");
+  flickerLed();
 }
 
 // =====================================================================
@@ -243,8 +265,7 @@ void setup()
   sensors.init(sensorPins, NUM_SENSORS, SENSOR_TIMEOUT_US, ZUMO_SENSOR_ARRAY_DEFAULT_EMITTER_PIN);
 
   buzzer.play(">g32>>c32");
-  while (buzzer.isPlaying()) { }
-  delay(300);
+  flickerLed();
   beepTimes(currentMode + 1);
   Serial.println(F("ZumoLineFollower ready. Short press = next mode, hold = calibrate."));
 }
