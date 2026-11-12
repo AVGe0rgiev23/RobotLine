@@ -70,6 +70,12 @@ Put 4 charged AA batteries in, keep the USB cable connected, and slide the power
 2. The Serial Monitor names each step while it happens: left track forward, left backward, right forward, right backward, both forward, spin.
 3. Write down any step that does the wrong thing. A track that runs backwards when it should go forwards is fixed in code later; tell us.
 
+**Straight-drive test** (robot on the floor, 1.5 m of free space in front)
+
+1. **Hold** the user button about 1 second, then let go.
+2. After 1 s the robot drives straight ahead for 2 s.
+3. If it curves, one motor is weaker: curving left = left side slower.
+
 When all of this works, the robot is ready for the race code (milestone M4 in IMPLEMENTATION_PLAN.md).
 
 ## Troubleshooting
