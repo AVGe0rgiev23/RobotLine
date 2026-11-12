@@ -48,6 +48,18 @@ Button: short press = next mode (before calibrating); hold ~1 s = calibrate (spi
 3. **Keep it beginner-readable:** plain names, a short comment per block, all tuning numbers at the top.
 4. **One feature per commit**, with a clear message. Update `docs/IMPLEMENTATION_PLAN.md` (status table) and the "HOW TO USE" header in the sketch when behaviour changes.
 5. **Pull before starting, push when done.** Two people and two AI tools work on this repo: avoid editing the same file at the same time; tell each other what you are changing.
+
+## Branches and how work gets merged
+
+- `claude/adoring-pasteur-gcprs8` is the **shared branch** (also the repo's default branch). It always holds code that compiles and has been tested on the robot. **Race-day code comes from this branch.**
+- **Codex / the second teammate works on their own branch**, created from the shared branch, named after the task, e.g. `codex/serial-report` or `codex/<short-task-name>`. Never commit directly to the shared branch from there.
+- When a task is done on a branch:
+  1. `./scripts/check.sh` passes (both sketches compile, no warnings from our files).
+  2. Push the branch and open a pull request into `claude/adoring-pasteur-gcprs8`, describing what changed and how to test it on the robot.
+  3. The team tests it on the robot together (`git fetch`, `git checkout <branch>`, upload, run the relevant rows of `docs/TEST_CHECKLIST.md`).
+  4. Only after the robot test passes: merge the pull request. Everyone then runs `git checkout claude/adoring-pasteur-gcprs8 && git pull`.
+- Before starting a branch, pull the latest shared branch, and keep branches short-lived (one task each) to avoid conflicts in `ZumoLineFollower.ino`.
+- After the Friday 20:00 code freeze, only tuning-number changes are merged.
 6. Memory: the Uno has 2 KB RAM; keep long strings in `F("...")`.
 
 ## Current status (12 Nov)

@@ -31,7 +31,21 @@ Our line-following robot for the Robo League 2026-2027 (Varna): a Pololu Zumo (A
 
 ## Working together
 
-- The repo has one branch, `claude/adoring-pasteur-gcprs8` (also the default branch). Everyone works on it unless agreed otherwise.
-- **Before you start:** close the sketch in the Arduino IDE, then `git pull`. **When you finish:** compile (`./scripts/check.sh` or the IDE), commit, `git push`.
+- **Shared branch:** `claude/adoring-pasteur-gcprs8` (the default branch). It always has tested code; **race-day code comes from here**.
+- **Second teammate (with Codex):** works on **her own branch** per task (e.g. `codex/<task-name>`), then opens a pull request into the shared branch.
+- **Before merging a pull request:** `./scripts/check.sh` passes, and we test it on the robot together.
+- **Test someone's branch on the robot:**
+
+  ```bash
+  git fetch && git checkout <branch-name>
+  ```
+
+  Upload and test with `docs/TEST_CHECKLIST.md`. Go back afterwards:
+
+  ```bash
+  git checkout claude/adoring-pasteur-gcprs8 && git pull
+  ```
+
+- **Before you start:** close the sketch in the Arduino IDE, then `git pull`. **When you finish:** compile, commit, `git push`.
 - Tell each other which file you are changing, so two people (or two AI tools) don't edit the same file at once.
 - If `git pull` says "your local changes would be overwritten": `git stash`, then `git pull` (your changes are kept in the stash).
