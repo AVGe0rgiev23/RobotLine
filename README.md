@@ -8,6 +8,8 @@ Our line-following robot for the Robo League 2026-2027 (Varna): a Pololu Zumo (A
 ## Start here
 
 - [docs/SETUP.md](docs/SETUP.md) — install the Arduino IDE and library, get the code, run the setup check
+- [docs/TEST_CHECKLIST.md](docs/TEST_CHECKLIST.md) — every test before the race, what to record, what to save
+- [AGENTS.md](AGENTS.md) — project rules and facts for AI coding agents (Codex, Claude) and teammates
 
 ## Plans
 
@@ -22,6 +24,14 @@ Our line-following robot for the Robo League 2026-2027 (Varna): a Pololu Zumo (A
   1. Switch on → short presses choose the mode (1 = Safe, 2 = Medium, 3 = Fast, 4 = Max = full power)
   2. Robot on the line, facing along it, hold the button ~1 s → it calibrates (spins ~4 s), LED on = ready
   3. On the start line: press and release → it starts the instant you let go
-  4. It stops by itself at the end of the line. Press during a run = stop. Reset button = choose a mode again
+  4. It stops by itself at the end of the line. Press during a run = stop. `mode N` over USB (or Reset) = change mode
 - [docs/TUNING.md](docs/TUNING.md) — how to make it fast: the USB tuning tool (`kd 16`, `slow 180`, `mode 4`, `save` …) and what to change when
 - [docs/logbook.md](docs/logbook.md) — write every tuning test here
+- `scripts/check.sh` — compiles both sketches for the Uno (run before every push)
+
+## Working together
+
+- The repo has one branch, `claude/adoring-pasteur-gcprs8` (also the default branch). Everyone works on it unless agreed otherwise.
+- **Before you start:** close the sketch in the Arduino IDE, then `git pull`. **When you finish:** compile (`./scripts/check.sh` or the IDE), commit, `git push`.
+- Tell each other which file you are changing, so two people (or two AI tools) don't edit the same file at once.
+- If `git pull` says "your local changes would be overwritten": `git stash`, then `git pull` (your changes are kept in the stash).
