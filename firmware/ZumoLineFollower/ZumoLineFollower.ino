@@ -21,8 +21,8 @@
 
   HOW TO USE (the "user button" is the small button next to the power switch).
     Crossing practice: set CROSSING_PRACTICE to true and upload. Use Safe mode.
-    The robot stops at each detected crossing. Press the user button to go
-    straight again. Set CROSSING_PRACTICE back to false before racing.
+    The robot takes right, left, left at its first three detected crossings,
+    then drives straight at later crossings. Set the flag to false for racing.
   Every beep is also shown on the yellow LED, so it works without the buzzer:
   a fast flicker = "hello/done", slow blinks = the mode number.
     1. Switch ON. Hello beep + flicker. The robot is in mode 1 (Safe): 1 beep/blink.
@@ -109,8 +109,15 @@ const unsigned int SENSOR_TIMEOUT_US = 2000;
 const int BLACK_THRESHOLD = 700;     // above this, a sensor "sees black"
 const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
-const bool CROSSING_PRACTICE = false; // true only when testing crossing detection
+const bool CROSSING_PRACTICE = true;  // enable the practice route
 const unsigned long CROSSING_CLEAR_MS = 30; // ignore brief gaps in the crossing reading
+enum TurnDirection { LEFT = -1, RIGHT = 1 };
+const TurnDirection CROSSING_TURNS[] = {RIGHT, LEFT, LEFT};
+const int CROSSING_TURN_COUNT = sizeof(CROSSING_TURNS) / sizeof(CROSSING_TURNS[0]);
+const int CROSSING_TURN_SPEED = 150;
+const unsigned long CROSSING_ADVANCE_MS = 120; // move the pivot toward the crossing
+const unsigned long CROSSING_MIN_SPIN_MS = 150; // give the old line time to leave
+const unsigned long CROSSING_MAX_SPIN_MS = 900;
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
@@ -549,24 +556,16 @@ void race()
   unsigned long startedAt = millis();
   unsigned long lostSince = 0;   // when the line disappeared (0 = line visible)
   bool lostCentred = false;      // was the robot centred on the line when it vanished?
-  bool waitingAtCrossing = false;
+  int nextTurn = 0;
+  int turnDirection = 0;
+  unsigned long turnStartedAt = 0;
+  bool leftOldLine = false;
   bool crossingHandled = false;
   unsigned long lastCrossingSeen = 0;
   const __FlashStringHelper *stopReason = F("button pressed");
 
   while (true)
   {
-    // While parked, the next press resumes the run instead of ending it.
-    if (waitingAtCrossing)
-    {
-      if (button.getSingleDebouncedPress())
-      {
-        lastCrossingSeen = millis();
-        waitingAtCrossing = false;
-      }
-      continue;
-    }
-
     // 0. Soft start: the top speed grows to maxSpeed during START_RAMP_MS.
     unsigned long sinceStart = millis() - startedAt;
     int top = m.maxSpeed;
@@ -592,21 +591,49 @@ void race()
     bool atCrossing = blackCount >= CROSSING_MIN_BLACK;
     if (CROSSING_PRACTICE)
     {
-      if (atCrossing) lastCrossingSeen = millis();
-      else if (millis() - lastCrossingSeen >= CROSSING_CLEAR_MS) crossingHandled = false;
+      unsigned long now = millis();
+      if (atCrossing || turnDirection != 0) lastCrossingSeen = now;
+      else if (now - lastCrossingSeen >= CROSSING_CLEAR_MS) crossingHandled = false;
 
-      if (atCrossing && !crossingHandled)
+      if (atCrossing && !crossingHandled && nextTurn < CROSSING_TURN_COUNT)
       {
-        motors.setSpeeds(0, 0);
-        lostSince = 0;
-        lastError = 0;
+        turnDirection = CROSSING_TURNS[nextTurn++];
+        turnStartedAt = now;
+        leftOldLine = false;
         crossingHandled = true;
-        waitingAtCrossing = true;
-        continue;
       }
     }
 
-    if (whiteCount == NUM_SENSORS)
+    if (turnDirection != 0)
+    {
+      unsigned long turnTime = millis() - turnStartedAt;
+      int turnSpeed = (int)((long)CROSSING_TURN_SPEED * scale / 100);
+      if (turnTime < CROSSING_ADVANCE_MS)
+      {
+        motors.setSpeeds(turnSpeed, turnSpeed);
+      }
+      else
+      {
+        // Wait for the middle sensors to leave the old line and find the new one.
+        bool centreBlack = sensorValues[2] > BLACK_THRESHOLD || sensorValues[3] > BLACK_THRESHOLD;
+        if (!centreBlack) leftOldLine = true;
+        unsigned long spinTime = turnTime - CROSSING_ADVANCE_MS;
+        if ((spinTime >= CROSSING_MIN_SPIN_MS && leftOldLine && centreBlack && !atCrossing)
+            || spinTime >= CROSSING_MAX_SPIN_MS)
+        {
+          turnDirection = 0;
+          lostSince = 0;
+          // If the line is missing, keep searching in the same direction.
+          lastError = centreBlack ? position - 2500 : turnDirection * END_CENTER_ERROR;
+          motors.setSpeeds(turnSpeed, turnSpeed);
+        }
+        else
+        {
+          motors.setSpeeds(turnDirection * turnSpeed, -turnDirection * turnSpeed);
+        }
+      }
+    }
+    else if (whiteCount == NUM_SENSORS)
     {
       // 4. No line under any sensor.
       if (lostSince == 0)
