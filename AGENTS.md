@@ -65,3 +65,15 @@ Button: short press = next mode (before calibrating); hold ~1 s = calibrate (spi
 ## Current status (12 Nov)
 
 New Zumo follows the line perfectly in Safe mode on the real track, but too slowly. Next: tune Medium → Fast → Max with the USB tool, try `timeout 1000`, run `docs/TEST_CHECKLIST.md`, mock competition Friday.
+
+
+## Git reminders for the team (agents: do this every time)
+
+The team are beginners. Whenever they are about to pull, commit, push, switch branches, test a branch or merge, **remind them of the matching checklist in `docs/GIT_GUIDE.md`** and give the exact commands, one per code block. Most important each time:
+
+- Close the sketch in the Arduino IDE before `git pull` / `git checkout` (it auto-saves old code over new).
+- `git status` first; `git stash` if there are local changes they do not want to commit.
+- Compile (`./scripts/check.sh` or IDE Verify) before every commit and push; test on the robot if driving behaviour changed.
+- `git diff` before committing, to catch stray typed or pasted text.
+- `git pull` before `git push`; on "CONFLICT" stop and help, never force-push.
+- Race-day code only from the shared branch.

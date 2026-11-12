@@ -9,6 +9,7 @@ Our line-following robot for the Robo League 2026-2027 (Varna): a Pololu Zumo (A
 
 - [docs/SETUP.md](docs/SETUP.md) — install the Arduino IDE and library, get the code, run the setup check
 - [docs/TEST_CHECKLIST.md](docs/TEST_CHECKLIST.md) — every test before the race, what to record, what to save
+- [docs/GIT_GUIDE.md](docs/GIT_GUIDE.md) — what to do before pulling, committing, pushing, testing a branch, merging
 - [AGENTS.md](AGENTS.md) — project rules and facts for AI coding agents (Codex, Claude) and teammates
 
 ## Plans
@@ -30,6 +31,9 @@ Our line-following robot for the Robo League 2026-2027 (Varna): a Pololu Zumo (A
 - `scripts/check.sh` — compiles both sketches for the Uno (run before every push)
 
 ## Working together
+
+Step-by-step checklists: [docs/GIT_GUIDE.md](docs/GIT_GUIDE.md).
+
 
 - **Shared branch:** `claude/adoring-pasteur-gcprs8` (the default branch). It always has tested code; **race-day code comes from here**.
 - **Second teammate (with Codex):** works on **her own branch** per task (e.g. `codex/<task-name>`), then opens a pull request into the shared branch.
