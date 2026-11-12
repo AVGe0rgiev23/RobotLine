@@ -4,7 +4,12 @@
   Robot: Arduino Uno + Pololu Zumo Shield v1.2 + Zumo reflectance sensor array.
   Library: ZumoShield (Pololu).
   Based on Pololu's LineFollower example, with these changes for racing:
-    - speed modes (Safe / Fast) chosen with the button, each with its own tuning
+    - 4 speed modes (Safe / Medium / Fast / Max) chosen with the button,
+      each with its own tuning
+    - soft start: motors build up to full speed in the first 0.15 s
+      (smaller current spike, fewer Arduino restarts, less track slip)
+    - optional battery check and battery compensation (needs the shield's
+      "battery level" holes joined with a soldered wire, see BATTERY settings)
     - calibration and start are separate steps; the run starts the moment the
       button is released (no music, no delay)
     - the inside track may run backwards in tight turns (faster hairpins)
@@ -18,7 +23,7 @@
   a fast flicker = "hello/done", slow blinks = the mode number.
     1. Switch ON. Hello beep + flicker. The robot is in mode 1 (Safe): 1 beep/blink.
     2. CHOOSE MODE: short press = next mode. The robot beeps and blinks the
-       mode number (1 = Safe, 2 = Fast).
+       mode number (1 = Safe, 2 = Medium, 3 = Fast, 4 = Max, then back to 1).
     3. CALIBRATE: put the robot ON the line, facing along it, so the line runs
        under the middle of the sensor bar (beside the start, not on the start
        line). Hold the button about 1 second, then let go. After 1 s the robot
@@ -53,10 +58,14 @@ struct Mode {
   int reverseLimit;  // how fast the inside track may run backwards in turns, 0..400
 };
 
+// Safe is the row we have tested on the robot. Medium, Fast and Max are
+// starting guesses: tune each one on the practice track before racing with it.
 const Mode MODES[] = {
   //  maxSpeed  kpNum  kpDen  kd  turnSlowdown  reverseLimit
-  {   250,      1,     4,     6,  50,           100 },   // mode 1: Safe
-  {   400,      1,     4,     8,  120,          200 },   // mode 2: Fast
+  {   250,      1,     4,     6,  50,           100 },   // mode 1: Safe (tested)
+  {   320,      1,     4,     8,  80,           150 },   // mode 2: Medium (untested)
+  {   370,      1,     4,     10, 110,          200 },   // mode 3: Fast (untested)
+  {   400,      1,     4,     12, 140,          250 },   // mode 4: Max (untested)
 };
 const int NUM_MODES = sizeof(MODES) / sizeof(MODES[0]);
 
@@ -76,6 +85,21 @@ const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
 // higher than its white value, or the calibration is refused (no line seen).
 const unsigned int MIN_CALIBRATION_RANGE = 300;
 const unsigned long LONG_PRESS_MS = 800;  // hold longer than this = calibrate
+
+// Soft start: top speed grows from 0 to maxSpeed over this many ms.
+const unsigned long START_RAMP_MS = 150;
+
+// ---- BATTERY ----
+// The Zumo Shield can measure the battery only if its "battery level" holes
+// (next to "A1") are joined with a short soldered wire. Until then, keep
+// BATTERY_WIRE_SOLDERED = false: the program then skips everything below.
+const bool BATTERY_WIRE_SOLDERED = false;
+const unsigned int LOW_BATTERY_MV = 4500;  // warn below this (4 NiMH AA ~ 4.8 V)
+// Battery compensation: on a fuller battery the motors are fast, so we scale
+// them down to behave like a NOMINAL_BATTERY_MV battery. Tuning then holds
+// from fresh to half-empty batteries. Only works with the wire soldered.
+const bool BATTERY_COMPENSATION = false;
+const unsigned int NOMINAL_BATTERY_MV = 4800;
 
 // =====================================================================
 // Robot parts (pins are fixed by the Zumo Shield)
@@ -135,6 +159,40 @@ unsigned long waitForPressDuration()
   unsigned long pressedAt = millis();
   button.waitForRelease();
   return millis() - pressedAt;
+}
+
+// Battery voltage in millivolts (Pololu's formula: pin A1 sees 2/3 of it).
+// Returns 0 if the battery wire is not soldered.
+unsigned int readBatteryMillivolts()
+{
+  if (!BATTERY_WIRE_SOLDERED) return 0;
+  return (unsigned int)((long)analogRead(A1) * 5000L * 3 / 2 / 1023);
+}
+
+// Prints the battery voltage and warns (low tone) if it is low.
+void checkBattery()
+{
+  unsigned int mv = readBatteryMillivolts();
+  if (mv == 0) return;  // not measured
+  Serial.print(F("Battery: "));
+  Serial.print(mv);
+  Serial.println(F(" mV"));
+  if (mv < LOW_BATTERY_MV)
+  {
+    Serial.println(F("Battery LOW: charge or replace the AA batteries."));
+    buzzer.play("<c4");
+  }
+}
+
+// Motor scale in percent for battery compensation (100 = no change).
+int batteryScalePercent()
+{
+  if (!BATTERY_COMPENSATION) return 100;
+  unsigned int mv = readBatteryMillivolts();
+  if (mv <= NOMINAL_BATTERY_MV) return 100;   // cannot go faster than full power
+  long percent = (long)NOMINAL_BATTERY_MV * 100 / mv;
+  if (percent < 70) percent = 70;             // safety limit
+  return (int)percent;
 }
 
 int clampSpeed(long speed, int lowest, int highest)
@@ -223,10 +281,21 @@ void race()
   const Mode &m = MODES[currentMode];
   lastError = 0;
   unsigned long loops = 0;
+  const int scale = batteryScalePercent();   // measured once, before the motors start
   unsigned long startedAt = millis();
 
   while (true)
   {
+    // 0. Soft start: the top speed grows to maxSpeed during START_RAMP_MS.
+    unsigned long sinceStart = millis() - startedAt;
+    int top = m.maxSpeed;
+    if (sinceStart < START_RAMP_MS)
+      top = (int)((long)m.maxSpeed * sinceStart / START_RAMP_MS);
+    top = (int)((long)top * scale / 100);
+    int reverse = (int)((long)m.reverseLimit * scale / 100);
+    int slowdown = (int)((long)m.turnSlowdown * scale / 100);
+    int spin = (int)((long)LOST_SPIN_SPEED * scale / 100);
+
     // 1. Read the sensors. position: 0 (line under left sensor) .. 5000 (right).
     int position = sensors.readLine(sensorValues);
 
@@ -242,15 +311,15 @@ void race()
     if (blackCount >= CROSSING_MIN_BLACK)
     {
       // 3. Crossing: drive straight, do not steer.
-      motors.setSpeeds(m.maxSpeed, m.maxSpeed);
+      motors.setSpeeds(top, top);
     }
     else if (whiteCount == NUM_SENSORS)
     {
       // 4. Line lost: spin towards the side where we saw it last. Never stop.
       if (lastError < 0)
-        motors.setSpeeds(-LOST_SPIN_SPEED, LOST_SPIN_SPEED);  // line was left
+        motors.setSpeeds(-spin, spin);  // line was left
       else
-        motors.setSpeeds(LOST_SPIN_SPEED, -LOST_SPIN_SPEED);  // line was right
+        motors.setSpeeds(spin, -spin);  // line was right
     }
     else
     {
@@ -261,11 +330,11 @@ void race()
       lastError = error;
 
       // 6. Slow down in curves (big error), full speed on straights.
-      int base = m.maxSpeed - (int)((long)m.turnSlowdown * abs(error) / 2500);
+      int base = top - (int)((long)slowdown * abs(error) / 2500);
 
       // 7. Motor speeds. The inside track may go backwards (down to -reverseLimit).
-      int left = clampSpeed(base + correction, -m.reverseLimit, m.maxSpeed);
-      int right = clampSpeed(base - correction, -m.reverseLimit, m.maxSpeed);
+      int left = clampSpeed(base + correction, -reverse, top);
+      int right = clampSpeed(base - correction, -reverse, top);
       motors.setSpeeds(left, right);
     }
 
@@ -303,6 +372,7 @@ void setup()
 
   buzzer.play(">g32>>c32");
   flickerLed();
+  checkBattery();
   beepTimes(currentMode + 1);
   Serial.println(F("ZumoLineFollower ready. Short press = next mode, hold = calibrate."));
 }

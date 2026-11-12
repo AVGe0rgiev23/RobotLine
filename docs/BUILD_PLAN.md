@@ -32,7 +32,7 @@ The LineFollower example already drives the motors at full power (400 out of 400
 | --- | --- | --- | --- |
 | LEDON | Sensor array, blue shorting block at the end | Connects LEDON to **pin 2** | Lets the code switch the sensor LEDs; the library expects pin 2 on an Uno |
 | Bz. | Shield, next to "328P" / "32U4" | **328P** side (pin 3) | Buzzer works with the Uno |
-| Battery level | Shield, near "A1" | Fit it now if the shorting block is there | Not used on Saturday; needed for battery compensation in Round 2. Harmless now |
+| Battery level | Shield, two holes marked "Battery Level" near "A1" | Disconnected by default; joined with a short **soldered wire** | Optional. Then set `BATTERY_WIRE_SOLDERED = true` in the code to get a low-battery warning (and optional battery compensation) |
 
 ## 3. Power (Thursday)
 
@@ -83,5 +83,5 @@ Only after the software is reliable. Ask the organizers first whether modified k
 | --- | --- | --- |
 | **Faster motors** (lower gear ratio, for example 50:1 instead of 75:1, or 75:1 instead of 100:1) | Top speed rises in proportion: 75:1 → 50:1 is 1.5× faster | Less torque, harder to control in 3 cm turns; must be re-tuned. Use "HP" (high-power) micro metal gearmotors, same size as the current ones |
 | **Wheel encoders** (magnetic encoder kits for micro metal gearmotors; need motors with an extended back shaft) | Measure real speed and distance; enables track memory | Needs free interrupt pins and wiring on the shield's prototyping area |
-| **Battery-level monitoring** (battery jumper + code) | Same behaviour on full and tired batteries | Just the jumper; software work |
+| **Battery-level monitoring** (soldered wire on the battery-level holes) | Low-battery warning; same behaviour on full and tired batteries | One short wire; the code is already written |
 | **Better batteries** (high-capacity low-self-discharge NiMH, all matched) | More consistent voltage | Cheap |

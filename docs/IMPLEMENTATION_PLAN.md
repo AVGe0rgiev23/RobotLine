@@ -2,7 +2,22 @@
 
 As of 11 Nov 2026. Race: **Saturday 14 Nov 2026**. Companion to [PLAN.md](PLAN.md) and [BUILD_PLAN.md](BUILD_PLAN.md).
 
-The race sketch now exists: `firmware/ZumoLineFollower/ZumoLineFollower.ino` covers milestones M4–M7 (it compiles for the Uno with ZumoShield 2.1.0). What remains is testing and tuning (M4–M8 tests below).
+The race sketch now exists: `firmware/ZumoLineFollower/ZumoLineFollower.ino` (compiles for the Uno with ZumoShield 2.1.0).
+
+**Status (12 Nov):**
+
+| Feature | Code | Tested on the robot |
+| --- | --- | --- |
+| Mode selection, calibration with safety check, instant start, LED + buzzer signals | Done | Yes |
+| PD steering, Safe mode | Done | Follows the line; wobbles; tuning pending on the new Zumo |
+| Inside track reverses in tight turns, slow down in curves | Done | Not yet |
+| Straight over crossings, spin to find a lost line | Done | Lost-line spin seen; crossing not yet |
+| 4 speed modes (Safe / Medium / Fast / Max) | Done | Medium/Fast/Max untested |
+| Soft start (0.15 s) | Done | Not yet |
+| Battery warning + compensation | Done, off until the battery-level wire is soldered | Not yet |
+| Faster sensor timeout | Setting ready (2000 µs now) | Not yet |
+
+What remains is testing and tuning (M4–M8 tests below), on the new Zumo.
 
 This section started as the plan for the code. We build one Arduino sketch in small milestones. Each milestone has a test the robot must pass before the next one starts, and each passing version is committed to this repo.
 
@@ -106,7 +121,7 @@ Ranked by how much time each one should save for the effort, for a Zumo on a tra
 | 5 | **Faster loop** (sensor timeout 1000–1500 µs) | More corrections per second, so less overshoot at high speed | This week |
 | 6 | **Speed in turns** (slow down when the error is big) | Lets Fast mode use 400 on straights without flying out of curves | This week |
 | 7 | **Fresh batteries for the fast attempts; clean tracks** | Motor speed follows battery voltage; grip decides cornering | This week |
-| 8 | **Battery compensation** (battery jumper on A1) | Same behaviour all day, so tuning holds | Round 2 |
+| 8 | **Battery compensation** (needs the battery-level wire soldered; code ready, off by default) | Same behaviour all day, so tuning holds | When the wire is soldered |
 | 9 | **Faster motors** (lower gear ratio, "HP" micro metal gearmotors) | Higher top speed (75:1 → 50:1 = 1.5×); needs re-tuning and organizer approval | Round 2 |
 | 10 | **Encoders + track memory** | Sprint straights, brake before known curves | Round 2 stretch |
 

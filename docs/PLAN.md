@@ -108,7 +108,7 @@ Everything a line follower needs is already on the robot and wired to fixed Ardu
 | User button | 12 | Start and speed-mode selection |
 | Buzzer | 3 | The "Bz." jumper must be on the **328P** side (pin 3), the setting for an Uno |
 | Yellow LED | 13 | Status light |
-| Battery level | A1 | Only works if the "Battery level" jumper is fitted; useful in Round 2 |
+| Battery level | A1 | Only works after the two "Battery Level" holes are joined with a soldered wire; then set `BATTERY_WIRE_SOLDERED = true` |
 | Accelerometer, compass, gyro | I²C (SDA, SCL) | Not needed for line following |
 
 **Without batteries (today):** USB powers the Uno, so you can upload programs and test the buzzer, LED and button. The motors and the sensors' infrared LEDs need the AA batteries and the power switch on.
@@ -206,7 +206,7 @@ The software and speed phases are the longest on purpose: races are won by testi
 
 **Phase 2 — Software v2 (7 Dec – 31 Jan).**
 
-- [ ] Slow down in turns, battery compensation (fit the battery-level jumper), four speed modes, better line-lost recovery.
+- [ ] Slow down in turns, battery compensation (solder the battery-level wire), four speed modes, better line-lost recovery.
 
 **Phase 3 — Speed push (1 Feb – 14 Mar).**
 
