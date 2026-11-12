@@ -114,9 +114,11 @@ const unsigned long CROSSING_CLEAR_MS = 30; // ignore brief gaps in the crossing
 enum TurnDirection { LEFT = -1, RIGHT = 1 };
 const TurnDirection CROSSING_TURNS[] = {RIGHT, LEFT, LEFT};
 const int CROSSING_TURN_COUNT = sizeof(CROSSING_TURNS) / sizeof(CROSSING_TURNS[0]);
-const int CROSSING_TURN_SPEED = 150;
+const int CROSSING_ADVANCE_SPEED = 150;
+const int CROSSING_TURN_SPEED = 200;
+const int CROSSING_CENTER_ERROR = 500; // line position must be close to 2500
 const unsigned long CROSSING_ADVANCE_MS = 180; // move the pivot toward the crossing
-const unsigned long CROSSING_MIN_SPIN_MS = 220; // give the old line time to leave
+const unsigned long CROSSING_MIN_SPIN_MS = 165; // shorter because the pivot is faster
 const unsigned long CROSSING_MAX_SPIN_MS = 900;
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
@@ -610,22 +612,24 @@ void race()
       int turnSpeed = (int)((long)CROSSING_TURN_SPEED * scale / 100);
       if (turnTime < CROSSING_ADVANCE_MS)
       {
-        motors.setSpeeds(turnSpeed, turnSpeed);
+        int advanceSpeed = (int)((long)CROSSING_ADVANCE_SPEED * scale / 100);
+        motors.setSpeeds(advanceSpeed, advanceSpeed);
       }
       else
       {
         // Wait for the middle sensors to leave the old line and find the new one.
         bool centreBlack = sensorValues[2] > BLACK_THRESHOLD || sensorValues[3] > BLACK_THRESHOLD;
+        int error = position - 2500;
+        bool lineCentred = centreBlack && abs(error) <= CROSSING_CENTER_ERROR && !atCrossing;
         if (!centreBlack) leftOldLine = true;
         unsigned long spinTime = turnTime - CROSSING_ADVANCE_MS;
-        if ((spinTime >= CROSSING_MIN_SPIN_MS && leftOldLine && centreBlack && !atCrossing)
+        if ((spinTime >= CROSSING_MIN_SPIN_MS && leftOldLine && lineCentred)
             || spinTime >= CROSSING_MAX_SPIN_MS)
         {
-          turnDirection = 0;
           lostSince = 0;
-          // If the line is missing, keep searching in the same direction.
-          lastError = centreBlack ? position - 2500 : turnDirection * END_CENTER_ERROR;
-          motors.setSpeeds(turnSpeed, turnSpeed);
+          // Let the regular steering or lost-line recovery take over.
+          lastError = whiteCount == NUM_SENSORS ? turnDirection * END_CENTER_ERROR : error;
+          turnDirection = 0;
         }
         else
         {
