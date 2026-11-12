@@ -20,6 +20,9 @@
     - adjustable sensor timeout for a faster control loop
 
   HOW TO USE (the "user button" is the small button next to the power switch).
+    Crossing practice: set CROSSING_PRACTICE to true and upload. Use Safe mode.
+    The robot stops at each detected crossing. Press the user button to go
+    straight again. Set CROSSING_PRACTICE back to false before racing.
   Every beep is also shown on the yellow LED, so it works without the buzzer:
   a fast flicker = "hello/done", slow blinks = the mode number.
     1. Switch ON. Hello beep + flicker. The robot is in mode 1 (Safe): 1 beep/blink.
@@ -106,6 +109,8 @@ const unsigned int SENSOR_TIMEOUT_US = 2000;
 const int BLACK_THRESHOLD = 700;     // above this, a sensor "sees black"
 const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
+const bool CROSSING_PRACTICE = false; // true only when testing crossing detection
+const unsigned long CROSSING_CLEAR_MS = 30; // ignore brief gaps in the crossing reading
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
@@ -544,10 +549,24 @@ void race()
   unsigned long startedAt = millis();
   unsigned long lostSince = 0;   // when the line disappeared (0 = line visible)
   bool lostCentred = false;      // was the robot centred on the line when it vanished?
+  bool waitingAtCrossing = false;
+  bool crossingHandled = false;
+  unsigned long lastCrossingSeen = 0;
   const __FlashStringHelper *stopReason = F("button pressed");
 
   while (true)
   {
+    // While parked, the next press resumes the run instead of ending it.
+    if (waitingAtCrossing)
+    {
+      if (button.getSingleDebouncedPress())
+      {
+        lastCrossingSeen = millis();
+        waitingAtCrossing = false;
+      }
+      continue;
+    }
+
     // 0. Soft start: the top speed grows to maxSpeed during START_RAMP_MS.
     unsigned long sinceStart = millis() - startedAt;
     int top = m.maxSpeed;
@@ -568,6 +587,23 @@ void race()
     {
       if (sensorValues[i] > BLACK_THRESHOLD) blackCount++;
       if (sensorValues[i] < WHITE_THRESHOLD) whiteCount++;
+    }
+
+    bool atCrossing = blackCount >= CROSSING_MIN_BLACK;
+    if (CROSSING_PRACTICE)
+    {
+      if (atCrossing) lastCrossingSeen = millis();
+      else if (millis() - lastCrossingSeen >= CROSSING_CLEAR_MS) crossingHandled = false;
+
+      if (atCrossing && !crossingHandled)
+      {
+        motors.setSpeeds(0, 0);
+        lostSince = 0;
+        lastError = 0;
+        crossingHandled = true;
+        waitingAtCrossing = true;
+        continue;
+      }
     }
 
     if (whiteCount == NUM_SENSORS)
@@ -607,7 +643,7 @@ void race()
           motors.setSpeeds(spin, -spin);  // line was right
       }
     }
-    else if (blackCount >= CROSSING_MIN_BLACK)
+    else if (atCrossing)
     {
       // 3. Crossing: drive straight, do not steer.
       lostSince = 0;
