@@ -40,12 +40,32 @@
        within 1.5 s. You can also press the button while it drives. It stops,
        beeps, and is ready again (LED on). Short press = run again with the same
        calibration. Hold 1 s = calibrate again.
-    7. CHANGE MODE after calibrating: press the Reset button, choose the mode
-       again (step 2) and calibrate again (step 3).
+    7. CHANGE MODE after calibrating: type "mode N" in the Serial Monitor
+       (see below), or press Reset, choose the mode and calibrate again.
+
+  TUNING OVER USB (no upload, no recalibration):
+    Keep the USB cable in and open the Serial Monitor at 9600 baud, with the
+    line-ending menu (bottom right) set to "Newline". Type a command + Enter:
+      help              list the commands
+      show              show all 4 modes and the current one
+      mode 3            switch to mode 3 (1 Safe, 2 Medium, 3 Fast, 4 Max)
+      speed 380         maxSpeed of the current mode      (0..400)
+      kp 1/4            Kp of the current mode, as N/D    (also "kp 1 4")
+      kd 16             Kd of the current mode            (0..200)
+      slow 180          turnSlowdown of the current mode  (0..maxSpeed)
+      rev 250           reverseLimit of the current mode  (0..400)
+      timeout 1000      sensor read timeout in us (1000..3000); faster loop
+                        when lower. Calibrate again afterwards.
+      save              remember all modes after switch-off (EEPROM)
+      reset             forget saved values, use the numbers in this file
+    A change works on the very next run. Without "save" it is lost at
+    switch-off. If you edit the MODES table below and upload, the new code
+    numbers are used and old saved values are ignored.
 */
 
 #include <Wire.h>
 #include <ZumoShield.h>
+#include <EEPROM.h>
 
 // =====================================================================
 // TUNING - change these numbers while testing. Write every change in the
@@ -63,14 +83,19 @@ struct Mode {
 
 // Safe is the row we have tested on the robot. Medium, Fast and Max are
 // starting guesses: tune each one on the practice track before racing with it.
-const Mode MODES[] = {
+// (These are the "code values". Values changed over USB and saved with "save"
+// replace them until you edit this table and upload again, or type "reset".)
+const Mode DEFAULT_MODES[] = {
   //  maxSpeed  kpNum  kpDen  kd  turnSlowdown  reverseLimit
   {   250,      1,     4,     6,  50,           100 },   // mode 1: Safe (tested)
   {   320,      1,     4,     8,  80,           150 },   // mode 2: Medium (untested)
   {   370,      1,     4,     10, 110,          200 },   // mode 3: Fast (untested)
   {   400,      1,     4,     12, 140,          250 },   // mode 4: Max (untested)
 };
-const int NUM_MODES = sizeof(MODES) / sizeof(MODES[0]);
+const int NUM_MODES = sizeof(DEFAULT_MODES) / sizeof(DEFAULT_MODES[0]);
+
+// The settings the robot actually uses (start as the code values).
+Mode modes[NUM_MODES];
 
 // Sensor read timeout in microseconds. Lower = faster loop. Pololu recommends
 // 1000..3000. Try 2000, then 1500, then 1000; keep the lowest value where the
@@ -121,13 +146,21 @@ const int LED_PIN = 13;
 const int NUM_SENSORS = 6;
 unsigned char sensorPins[NUM_SENSORS] = { 4, A3, 11, A0, A2, 5 };  // left to right
 
-ZumoReflectanceSensorArray sensors;
+// The Zumo sensor array, plus a way to change the read timeout while running.
+class RaceSensors : public ZumoReflectanceSensorArray
+{
+public:
+  void setTimeout(unsigned int timeoutUs) { _maxValue = timeoutUs; }
+};
+
+RaceSensors sensors;
 ZumoMotors motors;
 ZumoBuzzer buzzer;
 Pushbutton button(ZUMO_BUTTON);  // pin 12
 
 unsigned int sensorValues[NUM_SENSORS];
-int currentMode = 0;   // index into MODES (0 = Safe)
+int currentMode = 0;   // index into modes (0 = Safe)
+unsigned int sensorTimeout = SENSOR_TIMEOUT_US;  // can be changed over USB
 int lastError = 0;     // error from the previous loop (for Kd)
 bool calibrated = false;
 
@@ -163,11 +196,225 @@ void flickerLed()
   }
 }
 
+// =====================================================================
+// Saved settings (EEPROM) and the USB tuning commands
+// =====================================================================
+
+// What we store in EEPROM: a marker, the code values the saved values were
+// based on (so new code values win after an upload), and the saved values.
+struct SavedSettings {
+  unsigned int marker;
+  Mode basedOn[NUM_MODES];       // the code values when we saved
+  unsigned int basedOnTimeout;
+  Mode values[NUM_MODES];        // the saved values
+  unsigned int timeout;
+};
+const unsigned int SETTINGS_MARKER = 0x5A32;
+const int SETTINGS_ADDRESS = 0;
+
+void loadSettings()
+{
+  memcpy(modes, DEFAULT_MODES, sizeof(modes));
+  sensorTimeout = SENSOR_TIMEOUT_US;
+  SavedSettings saved;
+  EEPROM.get(SETTINGS_ADDRESS, saved);
+  if (saved.marker != SETTINGS_MARKER)
+  {
+    Serial.println(F("Using the code values (nothing saved)."));
+  }
+  else if (memcmp(saved.basedOn, DEFAULT_MODES, sizeof(saved.basedOn)) != 0
+           || saved.basedOnTimeout != SENSOR_TIMEOUT_US)
+  {
+    Serial.println(F("Code values changed since the last save: using the code values."));
+  }
+  else
+  {
+    memcpy(modes, saved.values, sizeof(modes));
+    sensorTimeout = saved.timeout;
+    Serial.println(F("Using SAVED values (type \"reset\" for the code values)."));
+  }
+}
+
+void saveSettings()
+{
+  SavedSettings saved;
+  saved.marker = SETTINGS_MARKER;
+  memcpy(saved.basedOn, DEFAULT_MODES, sizeof(saved.basedOn));
+  saved.basedOnTimeout = SENSOR_TIMEOUT_US;
+  memcpy(saved.values, modes, sizeof(saved.values));
+  saved.timeout = sensorTimeout;
+  EEPROM.put(SETTINGS_ADDRESS, saved);
+  Serial.println(F("Saved. These values are kept after switch-off."));
+}
+
+// Changes the sensor read timeout. The calibration must then be done again.
+void setSensorTimeout(unsigned int timeoutUs)
+{
+  if (timeoutUs == sensorTimeout) return;
+  sensorTimeout = timeoutUs;
+  sensors.setTimeout(sensorTimeout);
+  sensors.resetCalibration();
+  calibrated = false;
+  digitalWrite(LED_PIN, LOW);  // LED off = not ready
+  Serial.println(F("Sensor timeout changed: calibrate again (hold the button)."));
+}
+
+void resetSettings()
+{
+  EEPROM.put(SETTINGS_ADDRESS, (unsigned int)0);  // remove the marker
+  memcpy(modes, DEFAULT_MODES, sizeof(modes));
+  setSensorTimeout(SENSOR_TIMEOUT_US);
+  Serial.println(F("Back to the code values. Saved values removed."));
+}
+
+void printMode(int i)
+{
+  const Mode &m = modes[i];
+  Serial.print(i == currentMode ? F("> mode ") : F("  mode "));
+  Serial.print(i + 1);
+  Serial.print(F(": speed "));
+  Serial.print(m.maxSpeed);
+  Serial.print(F("  kp "));
+  Serial.print(m.kpNum);
+  Serial.print('/');
+  Serial.print(m.kpDen);
+  Serial.print(F("  kd "));
+  Serial.print(m.kd);
+  Serial.print(F("  slow "));
+  Serial.print(m.turnSlowdown);
+  Serial.print(F("  rev "));
+  Serial.println(m.reverseLimit);
+}
+
+void printAllModes()
+{
+  for (int i = 0; i < NUM_MODES; i++) printMode(i);
+  Serial.print(F("  sensor timeout: "));
+  Serial.print(sensorTimeout);
+  Serial.println(F(" us"));
+}
+
+void printHelp()
+{
+  Serial.println(F("Commands (then Enter):"));
+  Serial.println(F("  show | mode 1..4 | speed 0..400 | kp N/D | kd N | slow N | rev N"));
+  Serial.println(F("  timeout 1000..3000 (then calibrate again)"));
+  Serial.println(F("  save (keep after switch-off) | reset (code values) | help"));
+}
+
+// Reads a whole number from text; returns false if there is none.
+bool readNumber(const char *text, int &value)
+{
+  if (text == NULL || *text == '\0') return false;
+  char *end;
+  long v = strtol(text, &end, 10);
+  if (end == text) return false;
+  value = (int)v;
+  return true;
+}
+
+// Keeps a value between low and high.
+int limit(int value, int low, int high)
+{
+  if (value < low) return low;
+  if (value > high) return high;
+  return value;
+}
+
+// Runs one typed command, for example "kd 16" or "kp 1/4".
+void runCommand(char *line)
+{
+  char *word = strtok(line, " \t");
+  if (word == NULL) return;
+  char *arg1 = strtok(NULL, " \t/");
+  char *arg2 = strtok(NULL, " \t/");
+  for (char *c = word; *c; c++) *c = tolower(*c);
+
+  Mode &m = modes[currentMode];
+  int value;
+
+  if (strcmp(word, "help") == 0)        { printHelp(); return; }
+  else if (strcmp(word, "show") == 0)   { printAllModes(); return; }
+  else if (strcmp(word, "save") == 0)   { saveSettings(); return; }
+  else if (strcmp(word, "reset") == 0)  { resetSettings(); printAllModes(); return; }
+  else if (strcmp(word, "mode") == 0 && readNumber(arg1, value))
+  {
+    currentMode = limit(value, 1, NUM_MODES) - 1;
+    beepTimes(currentMode + 1);
+  }
+  else if (strcmp(word, "speed") == 0 && readNumber(arg1, value))
+  {
+    m.maxSpeed = limit(value, 0, 400);
+  }
+  else if (strcmp(word, "kp") == 0 && readNumber(arg1, value))
+  {
+    int den;
+    m.kpNum = limit(value, 0, 100);
+    if (readNumber(arg2, den)) m.kpDen = limit(den, 1, 100);
+  }
+  else if (strcmp(word, "kd") == 0 && readNumber(arg1, value))
+  {
+    m.kd = limit(value, 0, 200);
+  }
+  else if (strcmp(word, "slow") == 0 && readNumber(arg1, value))
+  {
+    m.turnSlowdown = limit(value, 0, 400);
+  }
+  else if (strcmp(word, "rev") == 0 && readNumber(arg1, value))
+  {
+    m.reverseLimit = limit(value, 0, 400);
+  }
+  else if (strcmp(word, "timeout") == 0 && readNumber(arg1, value))
+  {
+    setSensorTimeout(limit(value, 1000, 3000));
+    printAllModes();
+    return;
+  }
+  else
+  {
+    Serial.println(F("Unknown command. Type help."));
+    return;
+  }
+  printMode(currentMode);
+}
+
+// Collects typed characters; runs a command when Enter arrives.
+void handleSerial()
+{
+  static char line[32];
+  static byte length = 0;
+  while (Serial.available() > 0)
+  {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r')
+    {
+      if (length > 0)
+      {
+        line[length] = '\0';
+        runCommand(line);
+        length = 0;
+      }
+    }
+    else if (length < sizeof(line) - 1)
+    {
+      line[length++] = c;
+    }
+  }
+}
+
 // Waits for one press of the button and returns how long it was held (ms).
-// Returns when the button is released.
+// Returns when the button is released. While waiting, it answers USB commands.
 unsigned long waitForPressDuration()
 {
-  button.waitForPress();
+  while (true)
+  {
+    handleSerial();
+    if (button.isPressed())
+    {
+      delay(15);                       // ignore contact bounce
+      if (button.isPressed()) break;
+    }
+  }
   unsigned long pressedAt = millis();
   button.waitForRelease();
   return millis() - pressedAt;
@@ -290,7 +537,7 @@ void printCalibration()
 
 void race()
 {
-  const Mode &m = MODES[currentMode];
+  const Mode &m = modes[currentMode];
   lastError = 0;
   unsigned long loops = 0;
   const int scale = batteryScalePercent();   // measured once, before the motors start
@@ -398,6 +645,7 @@ void race()
   unsigned long ms = millis() - startedAt;
   Serial.print(F("Stopped: "));
   Serial.println(stopReason);
+  printMode(currentMode);  // the settings used, for the logbook
   Serial.print(F("Run stopped after "));
   Serial.print(ms);
   Serial.print(F(" ms, loops per second: "));
@@ -416,13 +664,16 @@ void setup()
 {
   Serial.begin(9600);
   pinMode(LED_PIN, OUTPUT);
-  sensors.init(sensorPins, NUM_SENSORS, SENSOR_TIMEOUT_US, ZUMO_SENSOR_ARRAY_DEFAULT_EMITTER_PIN);
+  loadSettings();
+  sensors.init(sensorPins, NUM_SENSORS, sensorTimeout, ZUMO_SENSOR_ARRAY_DEFAULT_EMITTER_PIN);
 
   buzzer.play(">g32>>c32");
   flickerLed();
   checkBattery();
   beepTimes(currentMode + 1);
   Serial.println(F("ZumoLineFollower ready. Short press = next mode, hold = calibrate."));
+  Serial.println(F("Tuning over USB: type help (Serial Monitor set to Newline)."));
+  printAllModes();
 }
 
 void loop()

@@ -23,4 +23,5 @@ Our line-following robot for the Robo League 2026-2027 (Varna): a Pololu Zumo (A
   2. Robot on the line, facing along it, hold the button ~1 s → it calibrates (spins ~4 s), LED on = ready
   3. On the start line: press and release → it starts the instant you let go
   4. It stops by itself at the end of the line. Press during a run = stop. Reset button = choose a mode again
+- [docs/TUNING.md](docs/TUNING.md) — how to make it fast: the USB tuning tool (`kd 16`, `slow 180`, `mode 4`, `save` …) and what to change when
 - [docs/logbook.md](docs/logbook.md) — write every tuning test here
