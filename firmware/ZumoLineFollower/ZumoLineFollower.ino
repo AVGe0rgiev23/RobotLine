@@ -15,7 +15,8 @@
     - the inside track may run backwards in tight turns (faster hairpins)
     - the robot slows down in curves and runs full speed on straights
     - drives straight over crossings
-    - if the line is lost, spins towards the side where it was last seen
+    - if the line is lost in a curve, spins towards the side where it was last seen
+    - stops by itself at the end of the line
     - adjustable sensor timeout for a faster control loop
 
   HOW TO USE (the "user button" is the small button next to the power switch).
@@ -34,8 +35,10 @@
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
-    6. STOP (testing only): press the button while it drives. It stops, beeps,
-       and is ready again (LED on). Short press = run again with the same
+    6. STOP: the robot stops by itself at the end of the line (the line ends
+       straight ahead), or if it loses the line in a curve and cannot find it
+       within 1.5 s. You can also press the button while it drives. It stops,
+       beeps, and is ready again (LED on). Short press = run again with the same
        calibration. Hold 1 s = calibrate again.
     7. CHANGE MODE after calibrating: press the Reset button, choose the mode
        again (step 2) and calibrate again (step 3).
@@ -80,6 +83,15 @@ const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
+
+// End of the track. If the line disappears while the robot is centred on it
+// (|error| below END_CENTER_ERROR), the line has ended straight ahead: the
+// robot keeps going straight at half speed for END_CONFIRM_MS to make sure,
+// then stops. If the line disappears off one side (overshot a curve), it spins
+// back towards it and stops only if it cannot find it within LOST_STOP_MS.
+const int END_CENTER_ERROR = 1000;         // 0..2500
+const unsigned long END_CONFIRM_MS = 100;
+const unsigned long LOST_STOP_MS = 1500;
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
 // After calibrating, every sensor's black value must be at least this much
 // higher than its white value, or the calibration is refused (no line seen).
@@ -283,6 +295,9 @@ void race()
   unsigned long loops = 0;
   const int scale = batteryScalePercent();   // measured once, before the motors start
   unsigned long startedAt = millis();
+  unsigned long lostSince = 0;   // when the line disappeared (0 = line visible)
+  bool lostCentred = false;      // was the robot centred on the line when it vanished?
+  const __FlashStringHelper *stopReason = F("button pressed");
 
   while (true)
   {
@@ -308,21 +323,52 @@ void race()
       if (sensorValues[i] < WHITE_THRESHOLD) whiteCount++;
     }
 
-    if (blackCount >= CROSSING_MIN_BLACK)
+    if (whiteCount == NUM_SENSORS)
+    {
+      // 4. No line under any sensor.
+      if (lostSince == 0)
+      {
+        lostSince = millis();
+        lostCentred = abs(lastError) < END_CENTER_ERROR;
+      }
+      unsigned long lostFor = millis() - lostSince;
+
+      if (lostCentred)
+      {
+        // 4a. The line ended straight ahead: end of the track?
+        //     Keep going straight briefly; stop if it really is gone.
+        if (lostFor >= END_CONFIRM_MS)
+        {
+          motors.setSpeeds(0, 0);
+          stopReason = F("end of the line");
+          break;
+        }
+        motors.setSpeeds(top / 2, top / 2);
+      }
+      else
+      {
+        // 4b. The line went off one side (overshot a curve): spin back towards it.
+        if (lostFor >= LOST_STOP_MS)
+        {
+          motors.setSpeeds(0, 0);
+          stopReason = F("line lost and not found");
+          break;
+        }
+        if (lastError < 0)
+          motors.setSpeeds(-spin, spin);  // line was left
+        else
+          motors.setSpeeds(spin, -spin);  // line was right
+      }
+    }
+    else if (blackCount >= CROSSING_MIN_BLACK)
     {
       // 3. Crossing: drive straight, do not steer.
+      lostSince = 0;
       motors.setSpeeds(top, top);
-    }
-    else if (whiteCount == NUM_SENSORS)
-    {
-      // 4. Line lost: spin towards the side where we saw it last. Never stop.
-      if (lastError < 0)
-        motors.setSpeeds(-spin, spin);  // line was left
-      else
-        motors.setSpeeds(spin, -spin);  // line was right
     }
     else
     {
+      lostSince = 0;  // line visible
       // 5. Normal: PD steering.
       int error = position - 2500;  // negative = line to the left
       long correction = (long)error * m.kpNum / m.kpDen
@@ -350,6 +396,8 @@ void race()
 
   // After the run: report how fast the loop was (helps with SENSOR_TIMEOUT_US).
   unsigned long ms = millis() - startedAt;
+  Serial.print(F("Stopped: "));
+  Serial.println(stopReason);
   Serial.print(F("Run stopped after "));
   Serial.print(ms);
   Serial.print(F(" ms, loops per second: "));
