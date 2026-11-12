@@ -117,6 +117,8 @@ const int CROSSING_TURN_COUNT = sizeof(CROSSING_TURNS) / sizeof(CROSSING_TURNS[0
 const int CROSSING_TURN_SPEED = 150;
 const unsigned long CROSSING_ADVANCE_MS = 120; // move the pivot toward the crossing
 const unsigned long CROSSING_MIN_SPIN_MS = 150; // give the old line time to leave
+const unsigned long CROSSING_LEFT_ADVANCE_MS = 180;
+const unsigned long CROSSING_LEFT_MIN_SPIN_MS = 220;
 const unsigned long CROSSING_MAX_SPIN_MS = 900;
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
@@ -607,8 +609,10 @@ void race()
     if (turnDirection != 0)
     {
       unsigned long turnTime = millis() - turnStartedAt;
+      unsigned long advanceTime = turnDirection == LEFT ? CROSSING_LEFT_ADVANCE_MS : CROSSING_ADVANCE_MS;
+      unsigned long minSpinTime = turnDirection == LEFT ? CROSSING_LEFT_MIN_SPIN_MS : CROSSING_MIN_SPIN_MS;
       int turnSpeed = (int)((long)CROSSING_TURN_SPEED * scale / 100);
-      if (turnTime < CROSSING_ADVANCE_MS)
+      if (turnTime < advanceTime)
       {
         motors.setSpeeds(turnSpeed, turnSpeed);
       }
@@ -617,8 +621,8 @@ void race()
         // Wait for the middle sensors to leave the old line and find the new one.
         bool centreBlack = sensorValues[2] > BLACK_THRESHOLD || sensorValues[3] > BLACK_THRESHOLD;
         if (!centreBlack) leftOldLine = true;
-        unsigned long spinTime = turnTime - CROSSING_ADVANCE_MS;
-        if ((spinTime >= CROSSING_MIN_SPIN_MS && leftOldLine && centreBlack && !atCrossing)
+        unsigned long spinTime = turnTime - advanceTime;
+        if ((spinTime >= minSpinTime && leftOldLine && centreBlack && !atCrossing)
             || spinTime >= CROSSING_MAX_SPIN_MS)
         {
           turnDirection = 0;
