@@ -91,7 +91,7 @@ const Mode DEFAULT_MODES[] = {
   {   250,      1,     4,     6,  50,           100 },   // mode 1: Safe (tested)
   {   320,      1,     4,     8,  80,           150 },   // mode 2: Medium (untested)
   {   370,      1,     4,     10, 110,          200 },   // mode 3: Fast (untested)
-  {   400,      1,     4,     12, 140,          250 },   // mode 4: Max (untested)
+  {   360,      1,     4,     12, 140,          250 },   // mode 4: Max (retest sharp turns)
 };
 const int NUM_MODES = sizeof(DEFAULT_MODES) / sizeof(DEFAULT_MODES[0]);
 
@@ -107,14 +107,11 @@ const unsigned int SENSOR_TIMEOUT_US = 2000;
 const int BLACK_THRESHOLD = 700;     // above this, a sensor "sees black"
 const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
-const int CROSSING_SPEED_LIMIT = 250; // give the finish detector time to sample
-const unsigned long CROSSING_HOLD_MS = 15; // ignore brief changes at the exit
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
 // If the line vanishes, back up briefly, then sweep toward its last side.
 const unsigned long LOST_BACKUP_MS = 250;
 const unsigned long LOST_WHITE_GRACE_MS = 1000; // roll across short white gaps
-const int LOST_EDGE_ERROR = 1500; // line was near an edge before it vanished
 const unsigned long LOST_SWEEP_MS = 350;
 const unsigned long FINISH_CONFIRM_MS = 120; // sustained black, longer than a crossing
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
@@ -546,8 +543,6 @@ void race()
   const __FlashStringHelper *stopReason = F("button pressed");
   unsigned long finishSince = 0;
   bool seeingFinish = false;
-  bool crossingRecent = false;
-  unsigned long lastCrossingAt = 0;
 
   while (true)
   {
@@ -574,19 +569,10 @@ void race()
     }
 
     bool atCrossing = blackCount >= CROSSING_MIN_BLACK;
-    unsigned long now = millis();
-    if (atCrossing)
-    {
-      crossingRecent = true;
-      lastCrossingAt = now;
-    }
-    else if (now - lastCrossingAt >= CROSSING_HOLD_MS)
-    {
-      crossingRecent = false;
-    }
     // Allow one edge sensor to miss the circle.
     if (blackCount >= NUM_SENSORS - 1)
     {
+      unsigned long now = millis();
       if (!seeingFinish)
       {
         finishSince = now;
@@ -604,24 +590,15 @@ void race()
       seeingFinish = false;
     }
 
-    if (crossingRecent && whiteCount != NUM_SENSORS)
-    {
-      // Hold a straight heading as the sensors leave the crossing.
-      lostSince = 0;
-      lastError = 0;
-      int crossingSpeed = min(top, CROSSING_SPEED_LIMIT);
-      motors.setSpeeds(crossingSpeed, crossingSpeed);
-    }
-    else if (whiteCount == NUM_SENSORS)
+    if (whiteCount == NUM_SENSORS)
     {
       // Back toward the last known line, then repeat a left/right sweep.
       if (lostSince == 0) lostSince = millis();
       unsigned long lostFor = millis() - lostSince;
-      // A centred line can have a zebra gap. An edge loss needs recovery now.
-      unsigned long grace = abs(lastError) >= LOST_EDGE_ERROR ? 0 : LOST_WHITE_GRACE_MS;
-      unsigned long searchTime = lostFor >= grace
-        ? (lostFor - grace) % (LOST_BACKUP_MS + 4 * LOST_SWEEP_MS) : 0;
-      if (lostFor < grace)
+      unsigned long searchTime = 0;
+      if (lostFor >= LOST_WHITE_GRACE_MS)
+        searchTime = (lostFor - LOST_WHITE_GRACE_MS) % (LOST_BACKUP_MS + 4 * LOST_SWEEP_MS);
+      if (lostFor < LOST_WHITE_GRACE_MS)
       {
         motors.setSpeeds(top, top);
       }
@@ -639,12 +616,17 @@ void race()
         motors.setSpeeds(direction * spin, -direction * spin);
       }
     }
+    else if (atCrossing)
+    {
+      // 3. Crossing: drive straight, do not steer.
+      lostSince = 0;
+      motors.setSpeeds(top, top);
+    }
     else
     {
+      lostSince = 0;  // line visible
       // 5. Normal: PD steering.
       int error = position - 2500;  // negative = line to the left
-      if (lostSince != 0) lastError = error; // avoid a steering jerk on reacquisition
-      lostSince = 0;
       long correction = (long)error * m.kpNum / m.kpDen
                       + (long)m.kd * (error - lastError);
       lastError = error;

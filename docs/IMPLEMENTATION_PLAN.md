@@ -12,7 +12,7 @@ The race sketch now exists: `firmware/ZumoLineFollower/ZumoLineFollower.ino` (co
 | PD steering, Safe mode | Done | Follows the line; wobbles; tuning pending on the new Zumo |
 | Inside track reverses in tight turns, slow down in curves | Done | Not yet |
 | Straight over crossings, back up and sweep to find a lost line | Implemented | Verify recovery with tests 5.3 and 5.4 |
-| Stop on the filled finish circle | Implemented | Cap speed on wide black markings so five or six sensors can see black for 120 ms. Verify with test 5.4a. |
+| Stop on the filled finish circle | Implemented | Five or six black sensors for 120 ms. Verify with test 5.4a. |
 | 4 speed modes (Safe / Medium / Fast / Max) | Done | Medium/Fast/Max untested |
 | Soft start (0.15 s) | Done | Not yet |
 | Battery warning + compensation | Done, off until the battery-level wire is soldered | Not yet |
