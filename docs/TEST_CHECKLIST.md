@@ -55,11 +55,10 @@ If 4.2 or 4.3 fails, type `timeout 2000` and calibrate again.
 | # | Test | How | Pass when | ✓ |
 | --- | --- | --- | --- | --- |
 | 5.1 | Crossing | Tape strip across the line at 90°, 10 cm straight after it | Drives straight over it, every time (try 5×) | [ ] |
-| 5.1a | Crossing route practice | Enable `CROSSING_PRACTICE`, upload, calibrate, and run in Safe mode on a route with at least four crossings and a normal bend | Turns right, left, left in order without a pause; drives straight at the fourth crossing and follows the bend. Repeat from the start to confirm the sequence resets. Restore `false`, upload again, and repeat 5.1. | [ ] |
 | 5.2 | Tight hairpin | 3 cm-radius U-turn in the line | Follows it without leaving the line | [ ] |
 | 5.3 | Lost line in a curve | Run the best mode through the sharpest curve | If it overshoots, it spins back and finds the line | [ ] |
 | 5.4 | End of the line | Let it drive off the end of a straight line | Stops within about 10 cm; Serial says "end of the line" | [ ] |
-| 5.4a | Filled finish circle | Drive across a regular crossing and then into the circle in Safe mode. With the practice route enabled, complete all three turns first. Repeat slightly off centre. | Drives through the crossing and stops on the circle. Serial says "finish circle". | [ ] |
+| 5.4a | Filled finish circle | Drive across a regular crossing and then into the circle in Safe mode. Repeat slightly off centre. | Drives through the crossing and stops on the circle. Serial says "finish circle". | [ ] |
 | 5.5 | Picked up | Lift the robot during a run | Stops; Serial says "end of the line" or "line lost" | [ ] |
 | 5.6 | Instant start | Press and release | Starts the moment the button is released, no music | [ ] |
 
