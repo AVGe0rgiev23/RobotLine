@@ -14,13 +14,11 @@
       button is released (no music, no delay)
     - the inside track may run backwards in tight turns (faster hairpins)
     - the robot slows down in curves and runs full speed on straights
-    - faster modes never slow down for curves: the outer track stays at full
-      speed, only the inner track slows or reverses; in sharp corners the robot
-      pivots (outer track full speed, inner track backwards)
-    - stops on solid black (finish area)
+    - corner assist for sharp corners (faster modes): pivots when the line
+      reaches an outer sensor, holds curve speed briefly, then speeds up
     - drives straight over crossings
-    - if the line is lost (e.g. overshot a sharp turn), it never stops: it spins
-      back towards the side the line was last clearly on, until it finds it
+    - if the line is lost in a curve, spins towards the side where it was last seen
+    - stops by itself at the end of the line
     - adjustable sensor timeout for a faster control loop
 
   HOW TO USE (the "user button" is the small button next to the power switch).
@@ -42,11 +40,9 @@
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
-    6. STOP: the robot stops by itself ONLY on SOLID BLACK (all 6 sensors black
-       for 0.12 s = the finish; crossings are too short to trigger it, and a
-       black start line under the robot is ignored). It never stops on white:
-       if it loses the line it spins back towards it. To stop it yourself,
-       press the button while it drives. It stops,
+    6. STOP: the robot stops by itself at the end of the line (the line ends
+       straight ahead), or if it loses the line in a curve and cannot find it
+       within 1.5 s. You can also press the button while it drives. It stops,
        beeps, and is ready again (LED on). Short press = run again with the same
        calibration. Hold 1 s = calibrate again.
     7. CHANGE MODE after calibrating: type "mode N" in the Serial Monitor
@@ -101,19 +97,15 @@ struct Mode {
 // starting guesses: tune each one on the practice track before racing with it.
 // (These are the "code values". Values changed over USB and saved with "save"
 // replace them until you edit this table and upload again, or type "reset".)
-// Safe drives exactly as tested. Medium/Fast/Max NEVER slow down for curves
-// (turnSlowdown 0, holdMs 0): the outer track stays at full speed and the
-// robot turns by slowing or reversing only the inner track. In sharp corners
-// it pivots with the outer track still at full speed (edgeSpeed = maxSpeed)
-// and the inner track backwards at reverseLimit.
-// If a corner is too sharp for full speed on your track, the fallback is a
-// small turnSlowdown or holdMs (see docs/TUNING.md).
+// The corner assist (edgeSpeed, holdMs) is off in Safe, so Safe drives
+// exactly as tested. In the faster modes it handles sharp corners, so you can
+// lower turnSlowdown there and keep more speed in gentle curves.
 const Mode DEFAULT_MODES[] = {
   //  maxSpeed  kpNum  kpDen  kd  turnSlowdown  reverseLimit  edgeSpeed  holdMs
-  {   250,      1,     4,     6,  50,           100,          0,         0 },  // 1: Safe (tested)
-  {   320,      1,     4,     8,  0,            250,          320,       0 },  // 2: Medium
-  {   370,      1,     4,     10, 0,            300,          370,       0 },  // 3: Fast
-  {   400,      1,     4,     12, 0,            350,          400,       0 },  // 4: Max
+  {   250,      1,     4,     6,  50,           100,          0,         0   },  // 1: Safe (tested)
+  {   320,      1,     4,     8,  80,           150,          160,       80  },  // 2: Medium
+  {   370,      1,     4,     10, 110,          200,          180,       100 },  // 3: Fast
+  {   400,      1,     4,     12, 140,          250,          200,       120 },  // 4: Max
 };
 const int NUM_MODES = sizeof(DEFAULT_MODES) / sizeof(DEFAULT_MODES[0]);
 
@@ -140,9 +132,6 @@ const unsigned int SENSOR_TIMEOUT_US = 2000;
 const int BLACK_THRESHOLD = 700;     // above this, a sensor "sees black"
 const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
-// SOLID BLACK = finish: all 6 sensors black for longer than this -> stop.
-// A 2 cm crossing passes much faster than this, so crossings still work.
-const unsigned long FINISH_BLACK_MS = 120;
 const bool CROSSING_PRACTICE = false; // true only when testing crossing detection
 const unsigned long CROSSING_CLEAR_MS = 30; // ignore brief gaps in the crossing reading
 
@@ -152,11 +141,14 @@ const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 const int EDGE_ERROR = 1800;              // |error| from here (line under an outer sensor) = sharp corner
 const unsigned long EXIT_RAMP_MS = 100;   // after the hold, speed rises back to full over this time
 
-// Line lost (all sensors white, e.g. it overshot a sharp turn): the robot never
-// stops; it spins back towards the side the line was last clearly on.
-// "Clearly" = |error| at least SIDE_ERROR, so a nearly centred reading at high
-// speed cannot make it turn the wrong way.
-const int SIDE_ERROR = 300;          // 0..2500
+// End of the track. If the line disappears while the robot is centred on it
+// (|error| below END_CENTER_ERROR), the line has ended straight ahead: the
+// robot keeps going straight at half speed for END_CONFIRM_MS to make sure,
+// then stops. If the line disappears off one side (overshot a curve), it spins
+// back towards it and stops only if it cannot find it within LOST_STOP_MS.
+const int END_CENTER_ERROR = 1000;         // 0..2500
+const unsigned long END_CONFIRM_MS = 100;
+const unsigned long LOST_STOP_MS = 1500;
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
 // After calibrating, every sensor's black value must be at least this much
 // higher than its white value, or the calibration is refused (no line seen).
@@ -269,43 +261,13 @@ bool oldSaveMatchesCode(const OldSavedSettings &old)
   return true;
 }
 
-// When saved values are ignored (because the code values changed), print
-// them, so nobody loses their tuning: re-type them over USB if you want them.
-void printIgnoredMode(int i, int speed, int kpNum, int kpDen, int kd, int slow, int rev)
-{
-  Serial.print(F("  old saved mode "));
-  Serial.print(i + 1);
-  Serial.print(F(": speed "));
-  Serial.print(speed);
-  Serial.print(F("  kp "));
-  Serial.print(kpNum);
-  Serial.print('/');
-  Serial.print(kpDen);
-  Serial.print(F("  kd "));
-  Serial.print(kd);
-  Serial.print(F("  slow "));
-  Serial.print(slow);
-  Serial.print(F("  rev "));
-  Serial.println(rev);
-}
-
 // Loads values saved by the previous program version (keeps the new corner
 // settings at their code values). Returns true if it did.
 bool loadOldSettings()
 {
   OldSavedSettings old;
   EEPROM.get(SETTINGS_ADDRESS, old);
-  if (old.marker != OLD_SETTINGS_MARKER) return false;
-  if (!oldSaveMatchesCode(old))
-  {
-    Serial.println(F("Code values changed since your last save. Your old saved values were:"));
-    for (int i = 0; i < NUM_MODES; i++)
-    {
-      const OldMode &o = old.values[i];
-      printIgnoredMode(i, o.maxSpeed, o.kpNum, o.kpDen, o.kd, o.turnSlowdown, o.reverseLimit);
-    }
-    return false;
-  }
+  if (old.marker != OLD_SETTINGS_MARKER || !oldSaveMatchesCode(old)) return false;
   for (int i = 0; i < NUM_MODES; i++)
   {
     modes[i].maxSpeed = old.values[i].maxSpeed;
@@ -336,12 +298,6 @@ void loadSettings()
            || saved.basedOnTimeout != SENSOR_TIMEOUT_US)
   {
     Serial.println(F("Code values changed since the last save: using the code values."));
-    Serial.println(F("Your old saved values were:"));
-    for (int i = 0; i < NUM_MODES; i++)
-    {
-      const Mode &o = saved.values[i];
-      printIgnoredMode(i, o.maxSpeed, o.kpNum, o.kpDen, o.kd, o.turnSlowdown, o.reverseLimit);
-    }
   }
   else
   {
@@ -671,13 +627,11 @@ void race()
   unsigned long loops = 0;
   const int scale = batteryScalePercent();   // measured once, before the motors start
   unsigned long startedAt = millis();
-  int lastSide = 1;              // side the line was last clearly on: -1 left, +1 right
+  unsigned long lostSince = 0;   // when the line disappeared (0 = line visible)
+  bool lostCentred = false;      // was the robot centred on the line when it vanished?
   bool waitingAtCrossing = false;
   bool crossingHandled = false;
   unsigned long lastCrossingSeen = 0;
-  unsigned long allBlackSince = 0; // when all sensors started seeing black (0 = not now)
-  bool finishArmed = false;        // finish check only after we have left black once
-                                   // (the robot may start ON a black start line)
   bool cornerActive = false;      // a sharp corner happened recently
   unsigned long cornerEnd = 0;    // when the curve-speed hold after it ends
   const __FlashStringHelper *stopReason = F("button pressed");
@@ -691,7 +645,6 @@ void race()
       {
         lastCrossingSeen = millis();
         waitingAtCrossing = false;
-        finishArmed = false;   // restarting on a crossing must not look like the finish
       }
       continue;
     }
@@ -734,23 +687,6 @@ void race()
       if (sensorValues[i] < WHITE_THRESHOLD) whiteCount++;
     }
 
-    // 2b. SOLID BLACK (finish area): all sensors black for FINISH_BLACK_MS -> stop.
-    if (blackCount == NUM_SENSORS)
-    {
-      if (allBlackSince == 0) allBlackSince = now;
-      else if (finishArmed && now - allBlackSince >= FINISH_BLACK_MS)
-      {
-        motors.setSpeeds(0, 0);
-        stopReason = F("solid black (finish)");
-        break;
-      }
-    }
-    else
-    {
-      allBlackSince = 0;
-      finishArmed = true;   // we are off the black start line now
-    }
-
     bool atCrossing = blackCount >= CROSSING_MIN_BLACK;
     if (CROSSING_PRACTICE)
     {
@@ -760,6 +696,7 @@ void race()
       if (atCrossing && !crossingHandled)
       {
         motors.setSpeeds(0, 0);
+        lostSince = 0;
         lastError = 0;
         crossingHandled = true;
         waitingAtCrossing = true;
@@ -769,41 +706,66 @@ void race()
 
     if (whiteCount == NUM_SENSORS)
     {
-      // 4. LINE LOST (e.g. overshot a sharp turn). Never stop: spin back
-      //    towards the side where the line was last clearly seen, until found.
-      if (lastSide < 0)
-        motors.setSpeeds(-spin, spin);  // line was on the left: turn left
-      else
-        motors.setSpeeds(spin, -spin);  // line was on the right: turn right
-      if (m.holdMs > 0)
+      // 4. No line under any sensor.
+      if (lostSince == 0)
       {
-        cornerActive = true;            // once found again, leave the corner gently
-        cornerEnd = now + m.holdMs;
+        lostSince = millis();
+        lostCentred = abs(lastError) < END_CENTER_ERROR;
+      }
+      unsigned long lostFor = millis() - lostSince;
+
+      if (lostCentred)
+      {
+        // 4a. The line ended straight ahead: end of the track?
+        //     Keep going straight briefly; stop if it really is gone.
+        if (lostFor >= END_CONFIRM_MS)
+        {
+          motors.setSpeeds(0, 0);
+          stopReason = F("end of the line");
+          break;
+        }
+        motors.setSpeeds(top / 2, top / 2);
+      }
+      else
+      {
+        // 4b. The line went off one side (overshot a curve): spin back towards it.
+        if (lostFor >= LOST_STOP_MS)
+        {
+          motors.setSpeeds(0, 0);
+          stopReason = F("line lost and not found");
+          break;
+        }
+        if (lastError < 0)
+          motors.setSpeeds(-spin, spin);  // line was left
+        else
+          motors.setSpeeds(spin, -spin);  // line was right
+        if (m.holdMs > 0)
+        {
+          cornerActive = true;            // once found again, leave the corner gently
+          cornerEnd = now + m.holdMs;
+        }
       }
     }
     else if (atCrossing)
     {
       // 3. Crossing: drive straight, do not steer.
+      lostSince = 0;
       motors.setSpeeds(top, top);
     }
     else
     {
+      lostSince = 0;  // line visible
       int error = position - 2500;  // negative = line to the left
-
-      // Remember which side the line is clearly on (used if the line is lost).
-      if (error <= -SIDE_ERROR) lastSide = -1;
-      else if (error >= SIDE_ERROR) lastSide = 1;
 
       if (edge > 0 && abs(error) >= EDGE_ERROR)
       {
         // 5a. SHARP CORNER: the line is under an outer sensor. Pivot: the
         //     outer track drives at edgeSpeed, the inner track goes backwards,
         //     so the robot turns almost on the spot and cannot slide off.
-        int outer = edge < top ? edge : top;  // never faster than the current top speed
         if (error < 0)
-          motors.setSpeeds(-reverse, outer);  // corner to the left
+          motors.setSpeeds(-reverse, edge);   // corner to the left
         else
-          motors.setSpeeds(outer, -reverse);  // corner to the right
+          motors.setSpeeds(edge, -reverse);   // corner to the right
         lastError = error;
         if (m.holdMs > 0)
         {

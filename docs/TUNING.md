@@ -52,29 +52,27 @@ The USB cable drags the robot while it drives. Either hold the cable up so it fo
 
 Change **one value at a time**, run **3 laps**, write it down.
 
-## Full speed through curves (modes 2–4)
+## Corner assist: fast AND no mistakes in sharp corners
 
-Medium, Fast and Max **never slow down for curves**: `slow 0`, `hold 0`. The outer track stays at full speed the whole time; the robot turns by slowing or reversing only the inner track. In sharp corners (line under an outer sensor) it pivots: outer track at `edge` (= full speed), inner track backwards at `rev`.
+At high speed the robot reaches a sharp corner before normal steering can turn it, and slides off on the outside. The corner assist (modes 2–4, off in Safe) fixes this without slowing the straights:
 
-What makes curves work at full speed:
+1. **Edge pivot (`edge`):** as soon as the line reaches an outer sensor, the robot stops steering gently and pivots: outer track at `edge`, inner track backwards at `rev`. It turns almost on the spot.
+2. **Hold (`hold`):** after the corner it stays at curve speed for `hold` ms (so it finishes hairpins and S-curves), then accelerates back to full speed over 0.1 s.
 
-| If, at full speed, it… | Change | Step |
-| --- | --- | --- |
-| Wobbles on straights | `kd` up | +4 |
-| Turns too late into a curve, drifts wide | `kp` up | 1/4 → 1/3 |
-| Slides out of sharp corners | `rev` up (inner track reverses harder) | +50, up to 400 |
-| Still slides out of the sharpest corner with `rev 400` | `timeout 1000` (faster steering), calibrate again | — |
-| Still slides out | Last resort: `hold 80` or `slow 40` (a tiny bit of braking only in that situation) | — |
+Because sharp corners are now handled, **lower `slow`** in the fast modes so the robot keeps more speed in gentle curves. That is where the time is won.
 
-## Solid black = finish
+Tuning the fastest mode (`mode 4`):
 
-If all 6 sensors see black for 0.12 s (a black finish area), the robot stops; the Serial Monitor says "solid black (finish)". A 2 cm crossing passes much faster, so crossings are unaffected. A black start line under the robot at the start is ignored. The time is `FINISH_BLACK_MS` in the code.
+1. Start: `edge 200`, `hold 120`, `rev 250`. Run 3 laps on a track with your sharpest corner.
+2. Still leaves the line in the sharpest corner → `rev 300`, then `edge 160`.
+3. Clean in corners → lower `slow` by 20 at a time until gentle curves get untidy, then go back one step.
+4. Finally try `speed 400` if not already, and `timeout 1000`.
 
 ## Order of work
 
 1. `mode 1` (Safe): check it still follows perfectly. Note the lap time.
 2. `mode 2` (Medium): tune until 3 clean laps. `save`.
-3. `mode 3` (Fast): start from the Medium values (`kd`, `rev`), raise as needed. `save`.
+3. `mode 3` (Fast): start from the Medium values (`kd`, `slow`, `rev`), raise as needed. `save`.
 4. `mode 4` (Max, `speed 400`): same. `save`.
 5. `timeout 1000`, calibrate again, check "Calibration OK", run the best mode again. If it is smoother, `save`.
 6. Copy the final values into the `DEFAULT_MODES` table in the code and push, so they are safe even if the robot's memory is cleared.
