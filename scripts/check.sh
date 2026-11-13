@@ -28,4 +28,20 @@ for sketch in "$repo"/firmware/*/; do
     status=1
   fi
 done
+
+# Computer tests for the line-tracking maths (needs g++).
+if command -v g++ >/dev/null 2>&1; then
+  echo "=== tests/test_line_tracking.cpp ==="
+  tmp="$(mktemp -d)"
+  if g++ -std=c++11 -Wall -Wextra -o "$tmp/t" "$repo/tests/test_line_tracking.cpp" && "$tmp/t" | tail -1 && "$tmp/t" >/dev/null; then
+    :
+  else
+    "$tmp/t" | grep FAIL || true
+    echo "FAILED: line-tracking tests"
+    status=1
+  fi
+  rm -rf "$tmp"
+else
+  echo "(g++ not found: skipping tests/test_line_tracking.cpp)"
+fi
 exit $status

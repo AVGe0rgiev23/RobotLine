@@ -16,6 +16,7 @@ The race sketch now exists: `firmware/ZumoLineFollower/ZumoLineFollower.ino` (co
 | Soft start (0.15 s) | Done | Not yet |
 | Battery warning + compensation | Done, off until the battery-level wire is soldered | Not yet |
 | Stop at the finish: 5 of 6 sensors dark (> 500) for 120 ms at speed 250, scaled by speed (ignored on the start line); "Finish check" report after each run | Done | First try did not stop on the black circle; retest 5.4a |
+| Crossings / zebra / start line: dark on both outer sides → straight, also through white gaps; no turning back; steering only by our own line (LineTracking.h, computer-tested) | Done | Not yet (tests 5.1, 5.1b, 5.1c) |
 | Faster sensor timeout | Setting ready (2000 µs now) | Not yet |
 
 What remains is testing and tuning (M4–M8 tests below), on the new Zumo.

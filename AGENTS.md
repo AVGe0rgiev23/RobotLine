@@ -20,7 +20,8 @@ A line-following robot for the Robo League 2026-2027 (Varna, Bulgaria), category
 | `docs/TEST_CHECKLIST.md` | Every test, what to record, pass criteria |
 | `docs/logbook.md` | Results of every test run |
 | `docs/SETUP.md`, `docs/BUILD_PLAN.md` | Laptop setup, hardware prep |
-| `scripts/check.sh` | Compiles both sketches for the Uno |
+| `scripts/check.sh` | Compiles both sketches for the Uno and runs the computer tests |
+| `tests/test_line_tracking.cpp` | Computer tests for `LineTracking.h` (crossing detection, line tracking) |
 
 ## Hardware facts (do not change)
 
@@ -33,7 +34,7 @@ A line-following robot for the Robo League 2026-2027 (Varna, Bulgaria), category
 
 ## How the race program works (keep this behaviour)
 
-Button: short press = next mode (before calibrating); hold ~1 s = calibrate (spins ~4 s; refused with a low double tone if any sensor did not see both white and black); short press when calibrated = start on release. LED + buzzer show everything. 4 modes in `DEFAULT_MODES` (Safe tested; Medium/Fast/Max starting guesses). PD steering, slowdown in curves, inside track may reverse, straight over crossings, spin back to a line lost off one side, stop at the end of the line (line vanished while centred → 100 ms straight, then stop), soft start 150 ms, optional battery compensation, stop at the finish (solid black area, a black circle on the team's track: 5+ of 6 sensors above `FINISH_DARK_LEVEL` = 500 for `FINISH_BLACK_MS` = 120 ms at speed 250, scaled inversely with the current top speed; armed only after leaving black once, so a black start line is ignored; a "Finish check" line is printed after each run). USB tuning commands (`mode`, `speed`, `kp`, `kd`, `slow`, `rev`, `timeout`, `show`, `save`, `reset`) with EEPROM storage; code values win after an upload.
+Button: short press = next mode (before calibrating); hold ~1 s = calibrate (spins ~4 s; refused with a low double tone if any sensor did not see both white and black); short press when calibrated = start on release. LED + buzzer show everything. 4 modes in `DEFAULT_MODES` (Safe tested; Medium/Fast/Max starting guesses). PD steering, slowdown in curves, inside track may reverse, straight over crossings, spin back to a line lost off one side, stop at the end of the line (line vanished while centred → 100 ms straight, then stop), soft start 150 ms, optional battery compensation, crossings/zebra/start line detected by `spansBothSides()` (dark at an outer sensor on both sides) or 5+ black → straight with no steering for `CROSSING_COMMIT_MS` (120 ms at speed 250, speed-scaled) after the last dark reading, lastError reset so it never spins back; steering uses `trackedPosition()` (dark patch nearest the previous position) from `firmware/ZumoLineFollower/LineTracking.h`, unit-tested in `tests/test_line_tracking.cpp` (run by `scripts/check.sh`), stop at the finish (solid black area, a black circle on the team's track: 5+ of 6 sensors above `FINISH_DARK_LEVEL` = 500 for `FINISH_BLACK_MS` = 120 ms at speed 250, scaled inversely with the current top speed; armed only after leaving black once, so a black start line is ignored; a "Finish check" line is printed after each run). USB tuning commands (`mode`, `speed`, `kp`, `kd`, `slow`, `rev`, `timeout`, `show`, `save`, `reset`) with EEPROM storage; code values win after an upload.
 
 ## Team decisions (respect these)
 

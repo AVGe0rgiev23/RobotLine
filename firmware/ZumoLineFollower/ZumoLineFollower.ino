@@ -14,7 +14,11 @@
       button is released (no music, no delay)
     - the inside track may run backwards in tight turns (faster hairpins)
     - the robot slows down in curves and runs full speed on straights
-    - drives straight over crossings
+    - crossings, zebra stripes and the start line: recognised when dark reaches
+      both outer sides of the sensor bar; the robot drives straight over them,
+      also through the white gaps between zebra stripes, and never turns back
+    - steers only by its own line: the edge of a crossing that is still ahead
+      cannot pull it sideways (no wobble)
     - if the line is lost in a curve, spins towards the side where it was last seen
     - stops by itself at the end of the line
     - stops at the finish: a solid black area (5 of 6 sensors dark for a short
@@ -74,6 +78,7 @@
 #include <Wire.h>
 #include <ZumoShield.h>
 #include <EEPROM.h>
+#include "LineTracking.h"   // which dark patch is our line; is this a crossing?
 
 // =====================================================================
 // TUNING - change these numbers while testing. Write every change in the
@@ -123,6 +128,18 @@ const int FINISH_MIN_DARK = 5;                // dark sensors needed (5 of 6)
 const int FINISH_DARK_LEVEL = 500;            // calibrated value above this = dark (finish only)
 const unsigned long FINISH_BLACK_MS = 120;    // at speed FINISH_REFERENCE_SPEED
 const int FINISH_REFERENCE_SPEED = 250;
+
+// CROSSINGS and ZEBRA STRIPES. A crossing = dark under BOTH outer sides of the
+// sensor bar (a single 2 cm line can never do that), or 5+ black sensors.
+// Then the robot drives straight - also through the white gaps between zebra
+// stripes - for CROSSING_COMMIT_MS after the last dark reading (at speed 250;
+// shorter when faster, same distance). The rules guarantee 10 cm of straight
+// line after every crossing, so this is safe, and it stops the robot from
+// turning back or wobbling on crossings.
+const unsigned long CROSSING_COMMIT_MS = 120;
+// A sensor above LINE_LEVEL counts as "part of a dark patch". The robot steers
+// only by the patch nearest to where its line was (see LineTracking.h).
+const unsigned int LINE_LEVEL = 400;
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
@@ -567,6 +584,9 @@ void race()
   unsigned long longestDarkMs = 0;   // for the report after the run
   unsigned long finishNeededMs = 0;  // how long it needed at that moment
   int mostDark = 0;                  // most dark sensors seen at once
+  int lastPosition = 2500;           // where our line was last time (0..5000)
+  bool crossingActive = false;       // driving straight over a crossing / zebra
+  unsigned long crossingUntil = 0;   // ... until this time
   const __FlashStringHelper *stopReason = F("button pressed");
 
   while (true)
@@ -600,9 +620,9 @@ void race()
       if (sensorValues[i] > FINISH_DARK_LEVEL) darkCount++;
     if (darkCount > mostDark) mostDark = darkCount;
 
+    unsigned long now = millis();
     if (darkCount >= FINISH_MIN_DARK)
     {
-      unsigned long now = millis();
       unsigned long finishMs = FINISH_BLACK_MS * FINISH_REFERENCE_SPEED
                                / (unsigned long)(top < 125 ? 125 : top);
       if (blackSince == 0) blackSince = now;
@@ -625,7 +645,33 @@ void race()
       finishArmed = true;   // we are off the black start line now
     }
 
-    if (whiteCount == NUM_SENSORS)
+    // 3. CROSSING / ZEBRA STRIPE / START LINE: dark on both outer sides (or 5+
+    //    black). Drive straight; keep doing so for CROSSING_COMMIT_MS after the
+    //    last dark reading, even over white (zebra gaps). Not while SPINNING
+    //    to find a lost line (the spinning bar could cross the line at a slant).
+    bool spinning = lostSince != 0 && !lostCentred;
+    bool crossingNow = !spinning &&
+        (spansBothSides(sensorValues, LINE_LEVEL) || blackCount >= CROSSING_MIN_BLACK);
+    if (crossingNow)
+    {
+      crossingActive = true;
+      crossingUntil = now + CROSSING_COMMIT_MS * FINISH_REFERENCE_SPEED
+                            / (unsigned long)(top < 125 ? 125 : top);
+    }
+    else if (crossingActive && (long)(now - crossingUntil) >= 0)
+    {
+      crossingActive = false;
+    }
+
+    if (crossingActive)
+    {
+      // Straight ahead, no steering. The line continues straight after it.
+      motors.setSpeeds(top, top);
+      lostSince = 0;
+      lastError = 0;           // so the robot never spins back after a crossing
+      lastPosition = 2500;     // our line will be straight ahead, in the middle
+    }
+    else if (whiteCount == NUM_SENSORS)
     {
       // 4. No line under any sensor.
       if (lostSince == 0)
@@ -662,16 +708,14 @@ void race()
           motors.setSpeeds(spin, -spin);  // line was right
       }
     }
-    else if (blackCount >= CROSSING_MIN_BLACK)
-    {
-      // 3. Crossing: drive straight, do not steer.
-      lostSince = 0;
-      motors.setSpeeds(top, top);
-    }
     else
     {
       lostSince = 0;  // line visible
-      // 5. Normal: PD steering.
+      // 5. Our line = the dark patch nearest to where it was (ignores the edge
+      //    of a crossing that is still ahead). PD steering on it.
+      int tracked = trackedPosition(sensorValues, lastPosition, LINE_LEVEL);
+      if (tracked >= 0) position = tracked;
+      lastPosition = position;
       int error = position - 2500;  // negative = line to the left
       long correction = (long)error * m.kpNum / m.kpDen
                       + (long)m.kd * (error - lastError);

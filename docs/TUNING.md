@@ -58,6 +58,15 @@ The robot stops when 5 of 6 sensors are dark for a short distance (120 ms at spe
 | "most dark sensors" is below 5 | Lower `FINISH_DARK_LEVEL` (500 → 400), or `FINISH_MIN_DARK` 5 → 4 |
 | It stops on a crossing | Raise `FINISH_BLACK_MS` (e.g. 120 → 160) |
 
+## Crossings and zebra stripes
+
+A crossing (also a zebra stripe or the start line) = dark under both outer sides of the sensor bar, which one 2 cm line can never do. The robot then drives straight with no steering, and keeps going straight for `CROSSING_COMMIT_MS` (120 ms at speed 250, shorter when faster, about 5 cm) after the last dark reading, also over the white gaps between zebra stripes. After a crossing it never spins back. While following, it steers only by the dark patch nearest to its own line, so the edge of a crossing that is still ahead cannot pull it sideways.
+
+| If… | Change in the code, then upload |
+| --- | --- |
+| It starts searching/stopping in long zebra gaps | Raise `CROSSING_COMMIT_MS` (120 → 180) |
+| It drives straight too long after a crossing and misses a following curve | Lower `CROSSING_COMMIT_MS` (120 → 90) |
+
 ## Order of work
 
 1. `mode 1` (Safe): check it still follows perfectly. Note the lap time.

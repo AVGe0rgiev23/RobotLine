@@ -55,6 +55,8 @@ If 4.2 or 4.3 fails, type `timeout 2000` and calibrate again.
 | # | Test | How | Pass when | ✓ |
 | --- | --- | --- | --- | --- |
 | 5.1 | Crossing | Tape strip across the line at 90°, 10 cm straight after it | Drives straight over it, every time (try 5×) | [ ] |
+| 5.1b | Zebra stripes | Several 2 cm black bars with white gaps, fastest mode, 5 runs | Straight over all bars, no wobble, no stop, no turning | [ ] |
+| 5.1c | No turning back at crossings | Track with 2+ crossings, fastest mode, 5 runs | Never turns onto the crossing line, never turns back, no wobble before or after | [ ] |
 | 5.2 | Tight hairpin | 3 cm-radius U-turn in the line | Follows it without leaving the line | [ ] |
 | 5.3 | Lost line in a curve | Run the best mode through the sharpest curve | If it overshoots, it spins back and finds the line | [ ] |
 | 5.4 | End of the line | Let it drive off the end of a straight line | Stops within about 10 cm; Serial says "end of the line" | [ ] |
