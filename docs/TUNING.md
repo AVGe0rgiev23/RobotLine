@@ -46,6 +46,18 @@ The USB cable drags the robot while it drives. Either hold the cable up so it fo
 
 Change **one value at a time**, run **3 laps**, write it down.
 
+## Finish (solid black area)
+
+The robot stops when 5 of 6 sensors are dark for a short distance (120 ms at speed 250, 75 ms at 400). After every run the Serial Monitor prints a line like:
+
+`Finish check: most dark sensors at once: 6 of 6; longest time with 5+ dark: 48 ms (needed more than 75 ms).`
+
+| What the line says | Change in the code (top of `ZumoLineFollower.ino`), then upload |
+| --- | --- |
+| Longest time is shorter than "needed" | Lower `FINISH_BLACK_MS` (e.g. 120 → 80), but keep it above what a crossing gives |
+| "most dark sensors" is below 5 | Lower `FINISH_DARK_LEVEL` (500 → 400), or `FINISH_MIN_DARK` 5 → 4 |
+| It stops on a crossing | Raise `FINISH_BLACK_MS` (e.g. 120 → 160) |
+
 ## Order of work
 
 1. `mode 1` (Safe): check it still follows perfectly. Note the lap time.

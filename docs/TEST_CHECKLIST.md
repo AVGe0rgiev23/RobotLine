@@ -58,7 +58,7 @@ If 4.2 or 4.3 fails, type `timeout 2000` and calibrate again.
 | 5.2 | Tight hairpin | 3 cm-radius U-turn in the line | Follows it without leaving the line | [ ] |
 | 5.3 | Lost line in a curve | Run the best mode through the sharpest curve | If it overshoots, it spins back and finds the line | [ ] |
 | 5.4 | End of the line | Let it drive off the end of a straight line | Stops within about 10 cm; Serial says "end of the line" | [ ] |
-| 5.4a | Finish (solid black) | Black area (e.g. 10 × 10 cm) at the end of the line; also start ON a black start line | Stops on the black area; Serial says "finish (solid black)"; does NOT stop on crossings or on the start line | [ ] |
+| 5.4a | Finish (solid black area) | The real finish (black circle) at the end of the line, in Safe and in the fastest mode; also start ON a black start line | Stops on the black area; Serial says "finish (solid black)"; does NOT stop on crossings or the start line. If it does not stop, copy the "Finish check" line from the Serial Monitor | [ ] |
 | 5.5 | Picked up | Lift the robot during a run | Stops; Serial says "end of the line" or "line lost" | [ ] |
 | 5.6 | Instant start | Press and release | Starts the moment the button is released, no music | [ ] |
 

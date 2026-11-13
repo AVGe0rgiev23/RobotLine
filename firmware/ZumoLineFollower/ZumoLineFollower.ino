@@ -17,7 +17,8 @@
     - drives straight over crossings
     - if the line is lost in a curve, spins towards the side where it was last seen
     - stops by itself at the end of the line
-    - stops at the finish: solid black (5 of 6 sensors black for more than 120 ms)
+    - stops at the finish: a solid black area (5 of 6 sensors dark for a short
+      distance: 120 ms at speed 250, shorter when faster)
     - adjustable sensor timeout for a faster control loop
 
   HOW TO USE (the "user button" is the small button next to the power switch).
@@ -36,9 +37,12 @@
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
-    6. STOP: the robot stops by itself at the FINISH (solid black: 5 of 6
-       sensors black for more than 120 ms; a 2 cm crossing is too short to
-       trigger it, and a black start line under the robot is ignored), at the
+    6. STOP: the robot stops by itself at the FINISH (a solid black area: 5 of
+       6 sensors dark for 120 ms at speed 250, 75 ms at speed 400; a 2 cm
+       crossing is too short to trigger it, and a black start line under the
+       robot is ignored). After each run the Serial Monitor prints a "Finish
+       check" line: how long it saw 5+ dark sensors and how long it needed. It
+       also stops at the
        end of the line (the line ends
        straight ahead), or if it loses the line in a curve and cannot find it
        within 1.5 s. You can also press the button while it drives. It stops,
@@ -110,9 +114,15 @@ const unsigned int SENSOR_TIMEOUT_US = 2000;
 const int BLACK_THRESHOLD = 700;     // above this, a sensor "sees black"
 const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
-// FINISH (solid black): at least 5 of 6 sensors black for longer than this
-// -> stop. A 2 cm crossing passes much faster, so crossings do not stop it.
-const unsigned long FINISH_BLACK_MS = 120;
+// FINISH (solid black area, e.g. a black circle): at least FINISH_MIN_DARK of
+// the 6 sensors dark for a short DISTANCE -> stop. We measure the distance as
+// time x speed: FINISH_BLACK_MS at speed FINISH_REFERENCE_SPEED (Safe), and
+// proportionally shorter when faster (400 -> 75 ms). A 2 cm crossing passes
+// much faster, so crossings do not stop the robot.
+const int FINISH_MIN_DARK = 5;                // dark sensors needed (5 of 6)
+const int FINISH_DARK_LEVEL = 500;            // calibrated value above this = dark (finish only)
+const unsigned long FINISH_BLACK_MS = 120;    // at speed FINISH_REFERENCE_SPEED
+const int FINISH_REFERENCE_SPEED = 250;
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
@@ -551,9 +561,12 @@ void race()
   unsigned long startedAt = millis();
   unsigned long lostSince = 0;   // when the line disappeared (0 = line visible)
   bool lostCentred = false;      // was the robot centred on the line when it vanished?
-  unsigned long blackSince = 0;  // when 5+ sensors started seeing black (0 = not now)
+  unsigned long blackSince = 0;  // when 5+ sensors started seeing dark (0 = not now)
   bool finishArmed = false;      // finish check only after we have left black once
                                  // (the robot may start ON a black start line)
+  unsigned long longestDarkMs = 0;   // for the report after the run
+  unsigned long finishNeededMs = 0;  // how long it needed at that moment
+  int mostDark = 0;                  // most dark sensors seen at once
   const __FlashStringHelper *stopReason = F("button pressed");
 
   while (true)
@@ -580,12 +593,26 @@ void race()
       if (sensorValues[i] < WHITE_THRESHOLD) whiteCount++;
     }
 
-    // 2b. FINISH (solid black): 5 or 6 sensors black for more than
-    //     FINISH_BLACK_MS -> stop.
-    if (blackCount >= CROSSING_MIN_BLACK)
+    // 2b. FINISH (solid black area): 5 of 6 sensors dark for a short distance
+    //     -> stop. The faster we go, the shorter the time (same distance).
+    int darkCount = 0;
+    for (int i = 0; i < NUM_SENSORS; i++)
+      if (sensorValues[i] > FINISH_DARK_LEVEL) darkCount++;
+    if (darkCount > mostDark) mostDark = darkCount;
+
+    if (darkCount >= FINISH_MIN_DARK)
     {
-      if (blackSince == 0) blackSince = millis();
-      else if (finishArmed && millis() - blackSince > FINISH_BLACK_MS)
+      unsigned long now = millis();
+      unsigned long finishMs = FINISH_BLACK_MS * FINISH_REFERENCE_SPEED
+                               / (unsigned long)(top < 125 ? 125 : top);
+      if (blackSince == 0) blackSince = now;
+      unsigned long darkFor = now - blackSince;
+      if (finishArmed && darkFor > longestDarkMs)
+      {
+        longestDarkMs = darkFor;
+        finishNeededMs = finishMs;
+      }
+      if (finishArmed && darkFor > finishMs)
       {
         motors.setSpeeds(0, 0);
         stopReason = F("finish (solid black)");
@@ -678,6 +705,15 @@ void race()
   Serial.print(ms);
   Serial.print(F(" ms, loops per second: "));
   Serial.println(ms > 0 ? loops * 1000UL / ms : 0);
+
+  // Finish report: helps when the robot did not stop at the finish.
+  Serial.print(F("Finish check: most dark sensors at once: "));
+  Serial.print(mostDark);
+  Serial.print(F(" of 6; longest time with 5+ dark: "));
+  Serial.print(longestDarkMs);
+  Serial.print(F(" ms (needed more than "));
+  Serial.print(finishNeededMs);
+  Serial.println(F(" ms)."));
 
   button.waitForRelease();
   buzzer.play(">g32>>c32");
