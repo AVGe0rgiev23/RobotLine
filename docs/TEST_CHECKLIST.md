@@ -57,9 +57,10 @@ If 4.2 or 4.3 fails, type `timeout 2000` and calibrate again.
 | 5.1 | Crossing | Tape strip across the line at 90°, 10 cm straight after it | Drives straight over it, every time (try 5×) | [ ] |
 | 5.1a | Crossing detection practice | Enable `CROSSING_PRACTICE`, upload, calibrate, and run in Safe mode on a track with two crossings and a normal bend | Stops once at each crossing and stays stopped until you press the button; continues straight after one press; does not stop on the bend. Restore `false`, upload again, and repeat 5.1. | [ ] |
 | 5.2 | Tight hairpin | 3 cm-radius U-turn in the line | Follows it without leaving the line | [ ] |
-| 5.2a | Sharp corner at full speed | `mode 4`, long straight into the sharpest corner, 5 runs | Pivots at the corner and never leaves the line (corner assist, see TUNING.md) | [ ] |
+| 5.2a | Sharp corner at full speed | `mode 4`, long straight into the sharpest corner, 5 runs | Takes the corner at full speed (pivot) and never leaves the line (see TUNING.md, "Full speed through curves") | [ ] |
 | 5.3 | Lost line in a curve | Run the best mode through the sharpest curve | If it overshoots, it spins back and finds the line | [ ] |
 | 5.4 | End of the line | Let it drive off the end of a straight line | Stops within about 10 cm; Serial says "end of the line" | [ ] |
+| 5.4a | Solid black finish | Black area (e.g. 10 × 10 cm of black tape/paper) at the end of the line; also start ON a black start line | Stops on the black area; Serial says "solid black (finish)"; does NOT stop on crossings or on the start line | [ ] |
 | 5.5 | Picked up | Lift the robot during a run | Stops; Serial says "end of the line" or "line lost" | [ ] |
 | 5.6 | Instant start | Press and release | Starts the moment the button is released, no music | [ ] |
 

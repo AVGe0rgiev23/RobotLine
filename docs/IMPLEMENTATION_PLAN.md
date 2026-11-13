@@ -16,7 +16,8 @@ The race sketch now exists: `firmware/ZumoLineFollower/ZumoLineFollower.ino` (co
 | 4 speed modes (Safe / Medium / Fast / Max) | Done | Medium/Fast/Max untested |
 | Soft start (0.15 s) | Done | Not yet |
 | Battery warning + compensation | Done, off until the battery-level wire is soldered | Not yet |
-| Corner assist (edge pivot + hold after sharp corners; modes 2–4) | Done | Not yet: test 5.2a |
+| Full speed through curves (modes 2–4: no curve slowdown, pivot with outer track at full speed) | Done | Not yet: test 5.2a |
+| Stop on solid black (finish), ignored on the start line | Done | Not yet: test 5.4a |
 | Faster sensor timeout | Setting ready (2000 µs now) | Not yet |
 
 What remains is testing and tuning (M4–M8 tests below), on the new Zumo.
