@@ -68,6 +68,11 @@ Tuning the fastest mode (`mode 4`):
 3. Clean in corners → lower `slow` by 20 at a time until gentle curves get untidy, then go back one step.
 4. Finally try `speed 400` if not already, and `timeout 1000`.
 
+## Finish and lost line
+
+- **Finish:** if all 6 sensors see black for 0.12 s (a black finish area), the robot stops; the Serial Monitor says "solid black (finish)". A 2 cm crossing passes much faster, so crossings are unaffected; a black start line under the robot at the start is ignored. The time is `FINISH_BLACK_MS` in the code.
+- **Lost line:** the robot never stops on white. If it overshoots a sharp turn it spins back towards the side the line was last clearly on, finds it and continues (with the `hold` slow-down after it, if `hold` is on). Each recovery costs time, so if it happens often in one corner: `hold` up, then `rev` up, then `slow` up.
+
 ## Order of work
 
 1. `mode 1` (Safe): check it still follows perfectly. Note the lap time.
