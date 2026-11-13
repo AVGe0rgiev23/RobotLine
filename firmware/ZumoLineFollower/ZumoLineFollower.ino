@@ -17,6 +17,7 @@
     - drives straight over crossings
     - if the line is lost in a curve, spins towards the side where it was last seen
     - stops by itself at the end of the line
+    - stops at the finish: solid black (5 of 6 sensors black for more than 120 ms)
     - adjustable sensor timeout for a faster control loop
 
   HOW TO USE (the "user button" is the small button next to the power switch).
@@ -35,7 +36,10 @@
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
-    6. STOP: the robot stops by itself at the end of the line (the line ends
+    6. STOP: the robot stops by itself at the FINISH (solid black: 5 of 6
+       sensors black for more than 120 ms; a 2 cm crossing is too short to
+       trigger it, and a black start line under the robot is ignored), at the
+       end of the line (the line ends
        straight ahead), or if it loses the line in a curve and cannot find it
        within 1.5 s. You can also press the button while it drives. It stops,
        beeps, and is ready again (LED on). Short press = run again with the same
@@ -106,6 +110,9 @@ const unsigned int SENSOR_TIMEOUT_US = 2000;
 const int BLACK_THRESHOLD = 700;     // above this, a sensor "sees black"
 const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
+// FINISH (solid black): at least 5 of 6 sensors black for longer than this
+// -> stop. A 2 cm crossing passes much faster, so crossings do not stop it.
+const unsigned long FINISH_BLACK_MS = 120;
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
@@ -544,6 +551,9 @@ void race()
   unsigned long startedAt = millis();
   unsigned long lostSince = 0;   // when the line disappeared (0 = line visible)
   bool lostCentred = false;      // was the robot centred on the line when it vanished?
+  unsigned long blackSince = 0;  // when 5+ sensors started seeing black (0 = not now)
+  bool finishArmed = false;      // finish check only after we have left black once
+                                 // (the robot may start ON a black start line)
   const __FlashStringHelper *stopReason = F("button pressed");
 
   while (true)
@@ -568,6 +578,24 @@ void race()
     {
       if (sensorValues[i] > BLACK_THRESHOLD) blackCount++;
       if (sensorValues[i] < WHITE_THRESHOLD) whiteCount++;
+    }
+
+    // 2b. FINISH (solid black): 5 or 6 sensors black for more than
+    //     FINISH_BLACK_MS -> stop.
+    if (blackCount >= CROSSING_MIN_BLACK)
+    {
+      if (blackSince == 0) blackSince = millis();
+      else if (finishArmed && millis() - blackSince > FINISH_BLACK_MS)
+      {
+        motors.setSpeeds(0, 0);
+        stopReason = F("finish (solid black)");
+        break;
+      }
+    }
+    else
+    {
+      blackSince = 0;
+      finishArmed = true;   // we are off the black start line now
     }
 
     if (whiteCount == NUM_SENSORS)
