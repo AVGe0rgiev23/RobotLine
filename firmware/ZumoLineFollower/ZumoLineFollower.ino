@@ -14,6 +14,8 @@
       button is released (no music, no delay)
     - the inside track may run backwards in tight turns (faster hairpins)
     - the robot slows down in curves and runs full speed on straights
+    - corner assist for sharp corners (faster modes): pivots when the line
+      reaches an outer sensor, holds curve speed briefly, then speeds up
     - drives straight over crossings
     - if the line is lost in a curve, spins towards the side where it was last seen
     - stops by itself at the end of the line
@@ -57,6 +59,8 @@
       kd 16             Kd of the current mode            (0..200)
       slow 180          turnSlowdown of the current mode  (0..maxSpeed)
       rev 250           reverseLimit of the current mode  (0..400)
+      edge 200          sharp-corner pivot speed (0 = off)  (0..400)
+      hold 120          ms at curve speed after a sharp corner (0 = off)
       timeout 1000      sensor read timeout in us (1000..3000); faster loop
                         when lower. Calibrate again afterwards.
       save              remember all modes after switch-off (EEPROM)
@@ -82,23 +86,42 @@ struct Mode {
   int kd;            // Kd (stops the wobble; raise it when speed goes up)
   int turnSlowdown;  // speed taken away when the line is at the far edge, 0..maxSpeed
   int reverseLimit;  // how fast the inside track may run backwards in turns, 0..400
+  int edgeSpeed;     // SHARP CORNERS: when the line reaches the outer sensors, the
+                     // robot pivots: outer track at edgeSpeed, inner track backwards
+                     // at reverseLimit. 0 = off (normal steering only). 0..400
+  int holdMs;        // after a sharp corner, keep curve speed this long (ms), then
+                     // speed up smoothly. Stops it shooting out of hairpins. 0 = off
 };
 
 // Safe is the row we have tested on the robot. Medium, Fast and Max are
 // starting guesses: tune each one on the practice track before racing with it.
 // (These are the "code values". Values changed over USB and saved with "save"
 // replace them until you edit this table and upload again, or type "reset".)
+// The corner assist (edgeSpeed, holdMs) is off in Safe, so Safe drives
+// exactly as tested. In the faster modes it handles sharp corners, so you can
+// lower turnSlowdown there and keep more speed in gentle curves.
 const Mode DEFAULT_MODES[] = {
-  //  maxSpeed  kpNum  kpDen  kd  turnSlowdown  reverseLimit
-  {   250,      1,     4,     6,  50,           100 },   // mode 1: Safe (tested)
-  {   320,      1,     4,     8,  80,           150 },   // mode 2: Medium (untested)
-  {   370,      1,     4,     10, 110,          200 },   // mode 3: Fast (untested)
-  {   400,      1,     4,     12, 140,          250 },   // mode 4: Max (untested)
+  //  maxSpeed  kpNum  kpDen  kd  turnSlowdown  reverseLimit  edgeSpeed  holdMs
+  {   250,      1,     4,     6,  50,           100,          0,         0   },  // 1: Safe (tested)
+  {   320,      1,     4,     8,  80,           150,          160,       80  },  // 2: Medium
+  {   370,      1,     4,     10, 110,          200,          180,       100 },  // 3: Fast
+  {   400,      1,     4,     12, 140,          250,          200,       120 },  // 4: Max
 };
 const int NUM_MODES = sizeof(DEFAULT_MODES) / sizeof(DEFAULT_MODES[0]);
 
 // The settings the robot actually uses (start as the code values).
 Mode modes[NUM_MODES];
+
+// The previous program version saved modes without edgeSpeed/holdMs.
+// We still read those saved values, so no tuning is lost after the update.
+struct OldMode { int maxSpeed, kpNum, kpDen, kd, turnSlowdown, reverseLimit; };
+struct OldSavedSettings {
+  unsigned int marker;
+  OldMode basedOn[NUM_MODES];
+  unsigned int basedOnTimeout;
+  OldMode values[NUM_MODES];
+  unsigned int timeout;
+};
 
 // Sensor read timeout in microseconds. Lower = faster loop. Pololu recommends
 // 1000..3000. Try 2000, then 1500, then 1000; keep the lowest value where the
@@ -113,6 +136,10 @@ const bool CROSSING_PRACTICE = false; // true only when testing crossing detecti
 const unsigned long CROSSING_CLEAR_MS = 30; // ignore brief gaps in the crossing reading
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
+
+// Corner assist (see edgeSpeed / holdMs in the MODES table).
+const int EDGE_ERROR = 1800;              // |error| from here (line under an outer sensor) = sharp corner
+const unsigned long EXIT_RAMP_MS = 100;   // after the hold, speed rises back to full over this time
 
 // End of the track. If the line disappears while the robot is centred on it
 // (|error| below END_CENTER_ERROR), the line has ended straight ahead: the
@@ -214,13 +241,53 @@ struct SavedSettings {
   Mode values[NUM_MODES];        // the saved values
   unsigned int timeout;
 };
-const unsigned int SETTINGS_MARKER = 0x5A32;
+const unsigned int SETTINGS_MARKER = 0x5A33;
 const int SETTINGS_ADDRESS = 0;
+
+const unsigned int OLD_SETTINGS_MARKER = 0x5A32;
+
+// True if the old saved values were based on today's code values.
+bool oldSaveMatchesCode(const OldSavedSettings &old)
+{
+  if (old.basedOnTimeout != SENSOR_TIMEOUT_US) return false;
+  for (int i = 0; i < NUM_MODES; i++)
+  {
+    const Mode &d = DEFAULT_MODES[i];
+    const OldMode &o = old.basedOn[i];
+    if (o.maxSpeed != d.maxSpeed || o.kpNum != d.kpNum || o.kpDen != d.kpDen ||
+        o.kd != d.kd || o.turnSlowdown != d.turnSlowdown || o.reverseLimit != d.reverseLimit)
+      return false;
+  }
+  return true;
+}
+
+// Loads values saved by the previous program version (keeps the new corner
+// settings at their code values). Returns true if it did.
+bool loadOldSettings()
+{
+  OldSavedSettings old;
+  EEPROM.get(SETTINGS_ADDRESS, old);
+  if (old.marker != OLD_SETTINGS_MARKER || !oldSaveMatchesCode(old)) return false;
+  for (int i = 0; i < NUM_MODES; i++)
+  {
+    modes[i].maxSpeed = old.values[i].maxSpeed;
+    modes[i].kpNum = old.values[i].kpNum;
+    modes[i].kpDen = old.values[i].kpDen;
+    modes[i].kd = old.values[i].kd;
+    modes[i].turnSlowdown = old.values[i].turnSlowdown;
+    modes[i].reverseLimit = old.values[i].reverseLimit;
+  }
+  sensorTimeout = old.timeout;
+  Serial.println(F("Loaded your SAVED values from the previous version, plus the new corner settings."));
+  Serial.println(F("Type save to keep them in the new format."));
+  return true;
+}
 
 void loadSettings()
 {
   memcpy(modes, DEFAULT_MODES, sizeof(modes));
   sensorTimeout = SENSOR_TIMEOUT_US;
+  if (loadOldSettings()) return;
   SavedSettings saved;
   EEPROM.get(SETTINGS_ADDRESS, saved);
   if (saved.marker != SETTINGS_MARKER)
@@ -288,7 +355,11 @@ void printMode(int i)
   Serial.print(F("  slow "));
   Serial.print(m.turnSlowdown);
   Serial.print(F("  rev "));
-  Serial.println(m.reverseLimit);
+  Serial.print(m.reverseLimit);
+  Serial.print(F("  edge "));
+  Serial.print(m.edgeSpeed);
+  Serial.print(F("  hold "));
+  Serial.println(m.holdMs);
 }
 
 void printAllModes()
@@ -303,6 +374,7 @@ void printHelp()
 {
   Serial.println(F("Commands (then Enter):"));
   Serial.println(F("  show | mode 1..4 | speed 0..400 | kp N/D | kd N | slow N | rev N"));
+  Serial.println(F("  edge 0..400 (sharp-corner pivot, 0 = off) | hold 0..1000 ms (0 = off)"));
   Serial.println(F("  timeout 1000..3000 (then calibrate again)"));
   Serial.println(F("  save (keep after switch-off) | reset (code values) | help"));
 }
@@ -368,6 +440,14 @@ void runCommand(char *line)
   else if (strcmp(word, "rev") == 0 && readNumber(arg1, value))
   {
     m.reverseLimit = limit(value, 0, 400);
+  }
+  else if (strcmp(word, "edge") == 0 && readNumber(arg1, value))
+  {
+    m.edgeSpeed = limit(value, 0, 400);
+  }
+  else if (strcmp(word, "hold") == 0 && readNumber(arg1, value))
+  {
+    m.holdMs = limit(value, 0, 1000);
   }
   else if (strcmp(word, "timeout") == 0 && readNumber(arg1, value))
   {
@@ -552,6 +632,8 @@ void race()
   bool waitingAtCrossing = false;
   bool crossingHandled = false;
   unsigned long lastCrossingSeen = 0;
+  bool cornerActive = false;      // a sharp corner happened recently
+  unsigned long cornerEnd = 0;    // when the curve-speed hold after it ends
   const __FlashStringHelper *stopReason = F("button pressed");
 
   while (true)
@@ -576,6 +658,22 @@ void race()
     int reverse = (int)((long)m.reverseLimit * scale / 100);
     int slowdown = (int)((long)m.turnSlowdown * scale / 100);
     int spin = (int)((long)LOST_SPIN_SPEED * scale / 100);
+    int edge = (int)((long)m.edgeSpeed * scale / 100);
+
+    // 0b. After a sharp corner: hold curve speed for holdMs, then speed up
+    //     smoothly over EXIT_RAMP_MS. Stops it shooting out of hairpins.
+    unsigned long now = millis();
+    if (cornerActive)
+    {
+      int curveTop = top - slowdown;
+      if (curveTop < 0) curveTop = 0;
+      if ((long)(now - cornerEnd) < 0)
+        top = curveTop;                                   // still holding
+      else if (now - cornerEnd < EXIT_RAMP_MS)
+        top = curveTop + (int)((long)(top - curveTop) * (now - cornerEnd) / EXIT_RAMP_MS);
+      else
+        cornerActive = false;                             // back to full speed
+    }
 
     // 1. Read the sensors. position: 0 (line under left sensor) .. 5000 (right).
     int position = sensors.readLine(sensorValues);
@@ -641,6 +739,11 @@ void race()
           motors.setSpeeds(-spin, spin);  // line was left
         else
           motors.setSpeeds(spin, -spin);  // line was right
+        if (m.holdMs > 0)
+        {
+          cornerActive = true;            // once found again, leave the corner gently
+          cornerEnd = now + m.holdMs;
+        }
       }
     }
     else if (atCrossing)
@@ -652,19 +755,39 @@ void race()
     else
     {
       lostSince = 0;  // line visible
-      // 5. Normal: PD steering.
       int error = position - 2500;  // negative = line to the left
-      long correction = (long)error * m.kpNum / m.kpDen
-                      + (long)m.kd * (error - lastError);
-      lastError = error;
 
-      // 6. Slow down in curves (big error), full speed on straights.
-      int base = top - (int)((long)slowdown * abs(error) / 2500);
+      if (edge > 0 && abs(error) >= EDGE_ERROR)
+      {
+        // 5a. SHARP CORNER: the line is under an outer sensor. Pivot: the
+        //     outer track drives at edgeSpeed, the inner track goes backwards,
+        //     so the robot turns almost on the spot and cannot slide off.
+        if (error < 0)
+          motors.setSpeeds(-reverse, edge);   // corner to the left
+        else
+          motors.setSpeeds(edge, -reverse);   // corner to the right
+        lastError = error;
+        if (m.holdMs > 0)
+        {
+          cornerActive = true;
+          cornerEnd = now + m.holdMs;
+        }
+      }
+      else
+      {
+        // 5. Normal: PD steering.
+        long correction = (long)error * m.kpNum / m.kpDen
+                        + (long)m.kd * (error - lastError);
+        lastError = error;
 
-      // 7. Motor speeds. The inside track may go backwards (down to -reverseLimit).
-      int left = clampSpeed(base + correction, -reverse, top);
-      int right = clampSpeed(base - correction, -reverse, top);
-      motors.setSpeeds(left, right);
+        // 6. Slow down in curves (big error), full speed on straights.
+        int base = top - (int)((long)slowdown * abs(error) / 2500);
+
+        // 7. Motor speeds. The inside track may go backwards (down to -reverseLimit).
+        int left = clampSpeed(base + correction, -reverse, top);
+        int right = clampSpeed(base - correction, -reverse, top);
+        motors.setSpeeds(left, right);
+      }
     }
 
     loops++;

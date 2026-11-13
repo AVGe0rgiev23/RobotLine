@@ -24,6 +24,8 @@ The goal: the fastest mode that stays on the line for 3 laps in a row. Tune with
 | `kd N` | Kd, stops the wobble | `kd 16` |
 | `slow N` | turnSlowdown, how much it brakes in curves | `slow 180` |
 | `rev N` | reverseLimit, how fast the inside track may go backwards in tight turns | `rev 250` |
+| `edge N` | Sharp-corner pivot: when the line reaches an outer sensor, the outer track drives at N and the inner track goes backwards at `rev`. 0 = off | `edge 200` |
+| `hold N` | After a sharp corner, stay at curve speed for N ms, then speed up smoothly. 0 = off | `hold 120` |
 | `timeout N` | Sensor read timeout in µs, 1000–3000. Lower = faster steering. **Calibrate again afterwards** | `timeout 1000` |
 | `save` | Keeps all values after switch-off | `save` |
 | `reset` | Back to the numbers written in the code | `reset` |
@@ -39,12 +41,32 @@ The USB cable drags the robot while it drives. Either hold the cable up so it fo
 | Wobbles left-right on straights | `kd` up | +4 |
 | Still wobbles after several Kd steps | `kp` down | 1/4 → 1/5 → 1/6 |
 | Slow to react, drifts off before a curve | `kp` up | 1/4 → 1/3 |
+| Flies out of **sharp** corners / hairpins at high speed | `edge` on (start 200), `hold` on (start 120); then `rev` up | `edge` ±20, `hold` +30 |
+| Pivots are too jerky or lose too much speed | `edge` up (gentler pivot, outer track faster), or `edge 0` to switch the pivot off | +20 |
+| Shoots out of the second half of a hairpin or S-curve | `hold` up | +30 |
+| Slow in gentle curves now that sharp corners are safe | `slow` down | −20 |
 | Flies out of curves (too fast to turn) | `slow` up | +40 |
 | Slow in curves but never leaves the line | `slow` down | −20 |
 | Cannot turn sharply enough in hairpins | `rev` up | +50 |
 | Jerky on gentle curves | `rev` down | −50 |
 
 Change **one value at a time**, run **3 laps**, write it down.
+
+## Corner assist: fast AND no mistakes in sharp corners
+
+At high speed the robot reaches a sharp corner before normal steering can turn it, and slides off on the outside. The corner assist (modes 2–4, off in Safe) fixes this without slowing the straights:
+
+1. **Edge pivot (`edge`):** as soon as the line reaches an outer sensor, the robot stops steering gently and pivots: outer track at `edge`, inner track backwards at `rev`. It turns almost on the spot.
+2. **Hold (`hold`):** after the corner it stays at curve speed for `hold` ms (so it finishes hairpins and S-curves), then accelerates back to full speed over 0.1 s.
+
+Because sharp corners are now handled, **lower `slow`** in the fast modes so the robot keeps more speed in gentle curves. That is where the time is won.
+
+Tuning the fastest mode (`mode 4`):
+
+1. Start: `edge 200`, `hold 120`, `rev 250`. Run 3 laps on a track with your sharpest corner.
+2. Still leaves the line in the sharpest corner → `rev 300`, then `edge 160`.
+3. Clean in corners → lower `slow` by 20 at a time until gentle curves get untidy, then go back one step.
+4. Finally try `speed 400` if not already, and `timeout 1000`.
 
 ## Order of work
 

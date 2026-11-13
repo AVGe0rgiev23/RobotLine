@@ -33,12 +33,12 @@ Race: **Saturday 14 Nov 2026**, Line following – ready kits.
 
 Goal: 3 clean laps in a row. Fill in the values that passed, then type `save`.
 
-| Mode | speed | kp | kd | slow | rev | Best lap time (s) | 3 clean laps? | ✓ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 Safe | 250 | 1/4 | 6 | 50 | 100 | | | [ ] |
-| 2 Medium | | | | | | | | [ ] |
-| 3 Fast | | | | | | | | [ ] |
-| 4 Max | 400 | | | | | | | [ ] |
+| Mode | speed | kp | kd | slow | rev | edge | hold | Best lap time (s) | 3 clean laps? | ✓ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 Safe | 250 | 1/4 | 6 | 50 | 100 | 0 | 0 | | | [ ] |
+| 2 Medium | | | | | | | | | | [ ] |
+| 3 Fast | | | | | | | | | | [ ] |
+| 4 Max | 400 | | | | | | | | | [ ] |
 
 ## 4. Sensor timeout
 
@@ -57,6 +57,7 @@ If 4.2 or 4.3 fails, type `timeout 2000` and calibrate again.
 | 5.1 | Crossing | Tape strip across the line at 90°, 10 cm straight after it | Drives straight over it, every time (try 5×) | [ ] |
 | 5.1a | Crossing detection practice | Enable `CROSSING_PRACTICE`, upload, calibrate, and run in Safe mode on a track with two crossings and a normal bend | Stops once at each crossing and stays stopped until you press the button; continues straight after one press; does not stop on the bend. Restore `false`, upload again, and repeat 5.1. | [ ] |
 | 5.2 | Tight hairpin | 3 cm-radius U-turn in the line | Follows it without leaving the line | [ ] |
+| 5.2a | Sharp corner at full speed | `mode 4`, long straight into the sharpest corner, 5 runs | Pivots at the corner and never leaves the line (corner assist, see TUNING.md) | [ ] |
 | 5.3 | Lost line in a curve | Run the best mode through the sharpest curve | If it overshoots, it spins back and finds the line | [ ] |
 | 5.4 | End of the line | Let it drive off the end of a straight line | Stops within about 10 cm; Serial says "end of the line" | [ ] |
 | 5.5 | Picked up | Lift the robot during a run | Stops; Serial says "end of the line" or "line lost" | [ ] |
