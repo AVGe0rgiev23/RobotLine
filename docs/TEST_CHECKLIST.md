@@ -59,6 +59,7 @@ If 4.2 or 4.3 fails, type `timeout 2000` and calibrate again.
 | 5.2 | Tight hairpin | 3 cm-radius U-turn in the line | Follows it without leaving the line | [ ] |
 | 5.3 | Lost line in a curve | Run the best mode through the sharpest curve | If it overshoots, it spins back and finds the line | [ ] |
 | 5.4 | End of the line | Let it drive off the end of a straight line | Stops within about 10 cm; Serial says "end of the line" | [ ] |
+| 5.4a | Filled finish circle | Drive across a regular crossing and then into the circle in Safe mode. With the practice route enabled, complete all three turns first. Repeat slightly off centre. | Drives through the crossing and stops on the circle. Serial says "finish circle". | [ ] |
 | 5.5 | Picked up | Lift the robot during a run | Stops; Serial says "end of the line" or "line lost" | [ ] |
 | 5.6 | Instant start | Press and release | Starts the moment the button is released, no music | [ ] |
 

@@ -23,6 +23,7 @@
     Crossing practice: set CROSSING_PRACTICE to true and upload. Use Safe mode.
     The robot takes right, left, left at its first three detected crossings,
     then drives straight at later crossings. Set the flag to false for racing.
+    The robot stops on a filled black finish marker after the planned turns.
   Every beep is also shown on the yellow LED, so it works without the buzzer:
   a fast flicker = "hello/done", slow blinks = the mode number.
     1. Switch ON. Hello beep + flicker. The robot is in mode 1 (Safe): 1 beep/blink.
@@ -130,6 +131,7 @@ const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 // back towards it and stops only if it cannot find it within LOST_STOP_MS.
 const int END_CENTER_ERROR = 1000;         // 0..2500
 const unsigned long END_CONFIRM_MS = 100;
+const unsigned long FINISH_CONFIRM_MS = 120; // sustained black, longer than a crossing
 const unsigned long LOST_STOP_MS = 1500;
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
 // After calibrating, every sensor's black value must be at least this much
@@ -565,6 +567,8 @@ void race()
   bool crossingHandled = false;
   unsigned long lastCrossingSeen = 0;
   const __FlashStringHelper *stopReason = F("button pressed");
+  unsigned long finishSince = 0;
+  bool seeingFinish = false;
 
   while (true)
   {
@@ -591,6 +595,29 @@ void race()
     }
 
     bool atCrossing = blackCount >= CROSSING_MIN_BLACK;
+    // Allow one edge sensor to miss the circle. Arm after the practice route.
+    bool finishArmed = !CROSSING_PRACTICE ||
+                       (nextTurn == CROSSING_TURN_COUNT && turnDirection == 0 && !crossingHandled);
+    if (finishArmed && blackCount >= NUM_SENSORS - 1)
+    {
+      unsigned long now = millis();
+      if (!seeingFinish)
+      {
+        finishSince = now;
+        seeingFinish = true;
+      }
+      if (now - finishSince >= FINISH_CONFIRM_MS)
+      {
+        motors.setSpeeds(0, 0);
+        stopReason = F("finish circle");
+        break;
+      }
+    }
+    else
+    {
+      seeingFinish = false;
+    }
+
     if (CROSSING_PRACTICE)
     {
       unsigned long now = millis();
