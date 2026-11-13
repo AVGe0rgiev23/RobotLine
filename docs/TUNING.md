@@ -70,7 +70,10 @@ Tuning the fastest mode (`mode 4`):
 
 ## Finish and lost line
 
-- **Finish:** if all 6 sensors see black for 0.12 s (a black finish area), the robot stops; the Serial Monitor says "solid black (finish)". A 2 cm crossing passes much faster, so crossings are unaffected; a black start line under the robot at the start is ignored. The time is `FINISH_BLACK_MS` in the code.
+- **Finish:** if 5 of 6 sensors see black for a moment, the robot stops; the Serial Monitor says "finish (5+ sensors black)". The moment is `FINISH_BLACK_MS` = 120 ms at speed 200 and shorter when faster (60 ms at speed 400), because it is the same distance. A 2 cm crossing or zebra stripe passes much faster, so they do not stop it; a black start line under the robot is ignored.
+  - Stops on a zebra stripe or crossing by mistake → raise `FINISH_BLACK_MS` (e.g. 160).
+  - Drives over the finish without stopping → lower `FINISH_BLACK_MS` (e.g. 90).
+- **Zebra stripes** (black bars, white gaps): after each bar the robot keeps driving straight at full speed through the white gap (up to `ZEBRA_GAP_MS` = 250 ms), so it neither slows down nor searches. If the gaps are very long and it starts searching between bars, raise `ZEBRA_GAP_MS`.
 - **Lost line:** the robot never stops on white. If it overshoots a sharp turn it spins back towards the side the line was last clearly on, finds it and continues (with the `hold` slow-down after it, if `hold` is on). Each recovery costs time, so if it happens often in one corner: `hold` up, then `rev` up, then `slow` up.
 
 ## Order of work

@@ -16,10 +16,12 @@
     - the robot slows down in curves and runs full speed on straights
     - corner assist for sharp corners (faster modes): pivots when the line
       reaches an outer sensor, holds curve speed briefly, then speeds up
-    - drives straight over crossings
+    - drives straight over crossings at full speed
     - if the line is lost (e.g. overshot a sharp turn), it never stops: it spins
       back towards the side the line was last clearly on, until it finds it
-    - stops on solid black (the finish)
+    - stops at the finish: 5 of 6 sensors black for a moment
+    - zebra stripes (black bars with white gaps): drives straight over them at
+      full speed, no slowing down, no searching in the gaps
     - adjustable sensor timeout for a faster control loop
 
   HOW TO USE (the "user button" is the small button next to the power switch).
@@ -41,9 +43,9 @@
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
-    6. STOP: the robot stops by itself ONLY on SOLID BLACK (all 6 sensors black
-       for 0.12 s = the finish; crossings are too short to trigger it, and a
-       black start line under the robot is ignored). It never stops on white:
+    6. STOP: the robot stops by itself ONLY at the FINISH: 5 of 6 sensors black
+       for a moment (0.06 s at full speed; crossings and 2 cm zebra stripes are
+       too short to trigger it, and a black start line under it is ignored). It never stops on white:
        if it loses the line it spins back towards it. To stop it yourself,
        press the button while it drives. It stops,
        beeps, and is ready again (LED on). Short press = run again with the same
@@ -137,9 +139,15 @@ const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
 const bool CROSSING_PRACTICE = false; // true only when testing crossing detection
 const unsigned long CROSSING_CLEAR_MS = 30; // ignore brief gaps in the crossing reading
-// SOLID BLACK = finish: all 6 sensors black for longer than this -> stop.
-// A 2 cm crossing passes much faster than this, so crossings still work.
+// FINISH: at least CROSSING_MIN_BLACK (5 of 6) sensors black for longer than
+// FINISH_BLACK_MS -> stop. The time is for speed 200; at higher speed it is
+// shorter (same distance): speed 400 -> 60 ms. A 2 cm crossing or zebra stripe
+// passes much faster, so crossings and zebra stripes do not stop the robot.
 const unsigned long FINISH_BLACK_MS = 120;
+// ZEBRA STRIPES (black bars with white gaps, no line between them): if all
+// sensors go white less than ZEBRA_GAP_MS after a stripe/crossing, the robot
+// keeps driving straight at full speed instead of searching for the line.
+const unsigned long ZEBRA_GAP_MS = 250;
 
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
@@ -631,7 +639,9 @@ void race()
   const int scale = batteryScalePercent();   // measured once, before the motors start
   unsigned long startedAt = millis();
   int lastSide = 1;              // side the line was last clearly on: -1 left, +1 right
-  unsigned long allBlackSince = 0; // when all sensors started seeing black (0 = not now)
+  unsigned long allBlackSince = 0; // when 5+ sensors started seeing black (0 = not now)
+  unsigned long lastStripeAt = 0;  // last time 5+ sensors saw black (crossing / zebra stripe)
+  bool seenStripe = false;         // has there been a crossing / stripe yet?
   bool finishArmed = false;        // finish check only after we have left black once
                                    // (the robot may start ON a black start line)
   bool waitingAtCrossing = false;
@@ -665,6 +675,7 @@ void race()
     int slowdown = (int)((long)m.turnSlowdown * scale / 100);
     int spin = (int)((long)LOST_SPIN_SPEED * scale / 100);
     int edge = (int)((long)m.edgeSpeed * scale / 100);
+    const int fullTop = top;   // full speed now (used on crossings and zebra stripes)
 
     // 0b. After a sharp corner: hold curve speed for holdMs, then speed up
     //     smoothly over EXIT_RAMP_MS. Stops it shooting out of hairpins.
@@ -693,24 +704,28 @@ void race()
       if (sensorValues[i] < WHITE_THRESHOLD) whiteCount++;
     }
 
-    // 2b. SOLID BLACK (finish area): all sensors black for FINISH_BLACK_MS -> stop.
-    if (blackCount == NUM_SENSORS)
+    bool atCrossing = blackCount >= CROSSING_MIN_BLACK;   // 5 or 6 sensors black
+
+    // 2b. FINISH: 5+ sensors black for longer than a stripe takes -> stop.
+    //     The faster we go, the sooner (it is the same distance).
+    if (atCrossing)
     {
+      unsigned long finishMs = FINISH_BLACK_MS * 200UL / (fullTop < 100 ? 100 : fullTop);
       if (allBlackSince == 0) allBlackSince = now;
-      else if (finishArmed && now - allBlackSince >= FINISH_BLACK_MS)
+      else if (finishArmed && now - allBlackSince >= finishMs)
       {
         motors.setSpeeds(0, 0);
-        stopReason = F("solid black (finish)");
+        stopReason = F("finish (5+ sensors black)");
         break;
       }
+      lastStripeAt = now;
+      seenStripe = true;
     }
     else
     {
       allBlackSince = 0;
       finishArmed = true;   // we are off the black start line now
     }
-
-    bool atCrossing = blackCount >= CROSSING_MIN_BLACK;
     if (CROSSING_PRACTICE)
     {
       if (atCrossing) lastCrossingSeen = millis();
@@ -726,7 +741,14 @@ void race()
       }
     }
 
-    if (whiteCount == NUM_SENSORS)
+    if (whiteCount == NUM_SENSORS && seenStripe && now - lastStripeAt < ZEBRA_GAP_MS)
+    {
+      // 3b. ZEBRA GAP: white just after a stripe/crossing. The line (or the
+      //     next stripe) is straight ahead, so keep going straight at full speed.
+      cornerActive = false;
+      motors.setSpeeds(fullTop, fullTop);
+    }
+    else if (whiteCount == NUM_SENSORS)
     {
       // 4. LINE LOST (e.g. overshot a sharp turn). Never stop: spin back
       //    towards the side where the line was last clearly seen, until found.
@@ -742,8 +764,9 @@ void race()
     }
     else if (atCrossing)
     {
-      // 3. Crossing: drive straight, do not steer.
-      motors.setSpeeds(top, top);
+      // 3. Crossing / zebra stripe: drive straight at full speed, do not steer.
+      cornerActive = false;
+      motors.setSpeeds(fullTop, fullTop);
     }
     else
     {

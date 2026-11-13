@@ -56,11 +56,12 @@ If 4.2 or 4.3 fails, type `timeout 2000` and calibrate again.
 | --- | --- | --- | --- | --- |
 | 5.1 | Crossing | Tape strip across the line at 90°, 10 cm straight after it | Drives straight over it, every time (try 5×) | [ ] |
 | 5.1a | Crossing detection practice | Enable `CROSSING_PRACTICE`, upload, calibrate, and run in Safe mode on a track with two crossings and a normal bend | Stops once at each crossing and stays stopped until you press the button; continues straight after one press; does not stop on the bend. Restore `false`, upload again, and repeat 5.1. | [ ] |
+| 5.1b | Zebra stripes | 3–5 black bars 2 cm wide across the track, white gaps between them, in the fastest mode | Drives straight over all bars at full speed: no slowing, no spinning, no stop | [ ] |
 | 5.2 | Tight hairpin | 3 cm-radius U-turn in the line | Follows it without leaving the line | [ ] |
 | 5.2a | Sharp corner at full speed | `mode 4`, long straight into the sharpest corner, 5 runs | Pivots at the corner and never leaves the line (corner assist, see TUNING.md) | [ ] |
 | 5.3 | Lost line in a sharp turn | Run the fastest mode into the sharpest turn | If it overshoots onto white, it does NOT stop: it spins back towards the turn (the same side it was turning) and continues | [ ] |
 | 5.4 | No stopping on white | Let it drive off the end of a line, or past a crossing | It never stops on white; it searches by spinning (stop it with the button) | [ ] |
-| 5.4a | Solid black finish | Black area (e.g. 10 × 10 cm of black tape/paper) at the end of the line; also start ON a black start line | Stops on the black area; Serial says "solid black (finish)"; does NOT stop on crossings or on the start line | [ ] |
+| 5.4a | Finish | Black area (e.g. 10 × 10 cm) at the end of the line; also start ON a black start line | Stops on the black area; Serial says "finish (5+ sensors black)"; does NOT stop on crossings, zebra stripes or the start line | [ ] |
 | 5.5 | Stop button | Press the button during a run | Stops; Serial says "button pressed" | [ ] |
 | 5.6 | Instant start | Press and release | Starts the moment the button is released, no music | [ ] |
 
