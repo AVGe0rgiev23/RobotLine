@@ -111,6 +111,7 @@ const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
 // If the line vanishes, back up briefly, then sweep toward its last side.
 const unsigned long LOST_BACKUP_MS = 250;
+const unsigned long LOST_WHITE_GRACE_MS = 1000; // roll across short white gaps
 const unsigned long LOST_SWEEP_MS = 350;
 const unsigned long FINISH_CONFIRM_MS = 120; // sustained black, longer than a crossing
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
@@ -594,8 +595,14 @@ void race()
       // Back toward the last known line, then repeat a left/right sweep.
       if (lostSince == 0) lostSince = millis();
       unsigned long lostFor = millis() - lostSince;
-      unsigned long searchTime = lostFor % (LOST_BACKUP_MS + 4 * LOST_SWEEP_MS);
-      if (searchTime < LOST_BACKUP_MS)
+      unsigned long searchTime = 0;
+      if (lostFor >= LOST_WHITE_GRACE_MS)
+        searchTime = (lostFor - LOST_WHITE_GRACE_MS) % (LOST_BACKUP_MS + 4 * LOST_SWEEP_MS);
+      if (lostFor < LOST_WHITE_GRACE_MS)
+      {
+        motors.setSpeeds(top, top);
+      }
+      else if (searchTime < LOST_BACKUP_MS)
       {
         motors.setSpeeds(-top / 2, -top / 2);
       }
