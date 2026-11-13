@@ -15,12 +15,13 @@
     - the inside track may run backwards in tight turns (faster hairpins)
     - the robot slows down in curves and runs full speed on straights
     - drives straight over crossings
-    - if the line is lost in a curve, spins towards the side where it was last seen
-    - stops by itself at the end of the line
+    - backs up and searches when the line is lost
+    - stops on the filled finish circle
     - adjustable sensor timeout for a faster control loop
 
   HOW TO USE (the "user button" is the small button next to the power switch).
     The robot drives straight at crossings and stops on the filled finish circle.
+    If it loses the line, it backs up and sweeps until it finds it again.
   Every beep is also shown on the yellow LED, so it works without the buzzer:
   a fast flicker = "hello/done", slow blinks = the mode number.
     1. Switch ON. Hello beep + flicker. The robot is in mode 1 (Safe): 1 beep/blink.
@@ -36,9 +37,8 @@
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
-    6. STOP: the robot stops by itself at the end of the line (the line ends
-       straight ahead), or if it loses the line in a curve and cannot find it
-       within 1.5 s. You can also press the button while it drives. It stops,
+    6. STOP: the robot stops on the filled finish circle.
+       You can also press the button while it drives. It stops,
        beeps, and is ready again (LED on). Short press = run again with the same
        calibration. Hold 1 s = calibrate again.
     7. CHANGE MODE after calibrating: type "mode N" in the Serial Monitor
@@ -109,15 +109,10 @@ const int WHITE_THRESHOLD = 200;     // below this, a sensor "sees white"
 const int CROSSING_MIN_BLACK = 5;    // this many black sensors = a crossing
 const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 
-// End of the track. If the line disappears while the robot is centred on it
-// (|error| below END_CENTER_ERROR), the line has ended straight ahead: the
-// robot keeps going straight at half speed for END_CONFIRM_MS to make sure,
-// then stops. If the line disappears off one side (overshot a curve), it spins
-// back towards it and stops only if it cannot find it within LOST_STOP_MS.
-const int END_CENTER_ERROR = 1000;         // 0..2500
-const unsigned long END_CONFIRM_MS = 100;
+// If the line vanishes, back up briefly, then sweep toward its last side.
+const unsigned long LOST_BACKUP_MS = 250;
+const unsigned long LOST_SWEEP_MS = 350;
 const unsigned long FINISH_CONFIRM_MS = 120; // sustained black, longer than a crossing
-const unsigned long LOST_STOP_MS = 1500;
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
 // After calibrating, every sensor's black value must be at least this much
 // higher than its white value, or the calibration is refused (no line seen).
@@ -544,7 +539,6 @@ void race()
   const int scale = batteryScalePercent();   // measured once, before the motors start
   unsigned long startedAt = millis();
   unsigned long lostSince = 0;   // when the line disappeared (0 = line visible)
-  bool lostCentred = false;      // was the robot centred on the line when it vanished?
   const __FlashStringHelper *stopReason = F("button pressed");
   unsigned long finishSince = 0;
   bool seeingFinish = false;
@@ -597,39 +591,22 @@ void race()
 
     if (whiteCount == NUM_SENSORS)
     {
-      // 4. No line under any sensor.
-      if (lostSince == 0)
-      {
-        lostSince = millis();
-        lostCentred = abs(lastError) < END_CENTER_ERROR;
-      }
+      // Back toward the last known line, then repeat a left/right sweep.
+      if (lostSince == 0) lostSince = millis();
       unsigned long lostFor = millis() - lostSince;
-
-      if (lostCentred)
+      unsigned long searchTime = lostFor % (LOST_BACKUP_MS + 4 * LOST_SWEEP_MS);
+      if (searchTime < LOST_BACKUP_MS)
       {
-        // 4a. The line ended straight ahead: end of the track?
-        //     Keep going straight briefly; stop if it really is gone.
-        if (lostFor >= END_CONFIRM_MS)
-        {
-          motors.setSpeeds(0, 0);
-          stopReason = F("end of the line");
-          break;
-        }
-        motors.setSpeeds(top / 2, top / 2);
+        motors.setSpeeds(-top / 2, -top / 2);
       }
       else
       {
-        // 4b. The line went off one side (overshot a curve): spin back towards it.
-        if (lostFor >= LOST_STOP_MS)
-        {
-          motors.setSpeeds(0, 0);
-          stopReason = F("line lost and not found");
-          break;
-        }
-        if (lastError < 0)
-          motors.setSpeeds(-spin, spin);  // line was left
-        else
-          motors.setSpeeds(spin, -spin);  // line was right
+        unsigned long sweepTime = searchTime - LOST_BACKUP_MS;
+        int direction = lastError < 0 ? -1 : 1;
+        // Sweep to one side, twice as far the other way, then back to centre.
+        if (sweepTime >= LOST_SWEEP_MS && sweepTime < 3 * LOST_SWEEP_MS)
+          direction = -direction;
+        motors.setSpeeds(direction * spin, -direction * spin);
       }
     }
     else if (atCrossing)
