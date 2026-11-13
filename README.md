@@ -25,7 +25,7 @@ Our line-following robot for the Robo League 2026-2027 (Varna): a Pololu Zumo (A
   1. Switch on → short presses choose the mode (1 = Safe, 2 = Medium, 3 = Fast, 4 = Max = full power)
   2. Robot on the line, facing along it, hold the button ~1 s → it calibrates (spins ~4 s), LED on = ready
   3. On the start line: press and release → it starts the instant you let go
-  4. It stops by itself only at the finish (5 of 6 sensors black for a moment), and drives over crossings and zebra stripes at full speed. It never stops on white: if it loses the line it spins back towards it. Press during a run = stop. `mode N` over USB (or Reset) = change mode
+  4. It stops by itself at the end of the line. Press during a run = stop. `mode N` over USB (or Reset) = change mode
 - [docs/TUNING.md](docs/TUNING.md) — how to make it fast: the USB tuning tool (`kd 16`, `slow 180`, `mode 4`, `save` …) and what to change when
 - [docs/logbook.md](docs/logbook.md) — write every tuning test here
 - `scripts/check.sh` — compiles both sketches for the Uno (run before every push)

@@ -33,12 +33,12 @@ Race: **Saturday 14 Nov 2026**, Line following – ready kits.
 
 Goal: 3 clean laps in a row. Fill in the values that passed, then type `save`.
 
-| Mode | speed | kp | kd | slow | rev | edge | hold | Best lap time (s) | 3 clean laps? | ✓ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 Safe | 250 | 1/4 | 6 | 50 | 100 | 0 | 0 | | | [ ] |
-| 2 Medium | | | | | | | | | | [ ] |
-| 3 Fast | | | | | | | | | | [ ] |
-| 4 Max | 400 | | | | | | | | | [ ] |
+| Mode | speed | kp | kd | slow | rev | Best lap time (s) | 3 clean laps? | ✓ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 Safe | 250 | 1/4 | 6 | 50 | 100 | | | [ ] |
+| 2 Medium | | | | | | | | [ ] |
+| 3 Fast | | | | | | | | [ ] |
+| 4 Max | 400 | | | | | | | [ ] |
 
 ## 4. Sensor timeout
 
@@ -55,14 +55,10 @@ If 4.2 or 4.3 fails, type `timeout 2000` and calibrate again.
 | # | Test | How | Pass when | ✓ |
 | --- | --- | --- | --- | --- |
 | 5.1 | Crossing | Tape strip across the line at 90°, 10 cm straight after it | Drives straight over it, every time (try 5×) | [ ] |
-| 5.1a | Crossing detection practice | Enable `CROSSING_PRACTICE`, upload, calibrate, and run in Safe mode on a track with two crossings and a normal bend | Stops once at each crossing and stays stopped until you press the button; continues straight after one press; does not stop on the bend. Restore `false`, upload again, and repeat 5.1. | [ ] |
-| 5.1b | Zebra stripes | 3–5 black bars 2 cm wide across the track, white gaps between them, in the fastest mode | Drives straight over all bars at full speed: no slowing, no spinning, no stop | [ ] |
 | 5.2 | Tight hairpin | 3 cm-radius U-turn in the line | Follows it without leaving the line | [ ] |
-| 5.2a | Sharp corner at full speed | `mode 4`, long straight into the sharpest corner, 5 runs | Pivots at the corner and never leaves the line (corner assist, see TUNING.md) | [ ] |
-| 5.3 | Lost line in a sharp turn | Run the fastest mode into the sharpest turn | If it overshoots onto white, it does NOT stop: it spins back towards the turn (the same side it was turning) and continues | [ ] |
-| 5.4 | No stopping on white | Let it drive off the end of a line, or past a crossing | It never stops on white; it searches by spinning (stop it with the button) | [ ] |
-| 5.4a | Finish | Black area (e.g. 10 × 10 cm) at the end of the line; also start ON a black start line | Stops on the black area; Serial says "finish (5+ sensors black)"; does NOT stop on crossings, zebra stripes or the start line | [ ] |
-| 5.5 | Stop button | Press the button during a run | Stops; Serial says "button pressed" | [ ] |
+| 5.3 | Lost line in a curve | Run the best mode through the sharpest curve | If it overshoots, it spins back and finds the line | [ ] |
+| 5.4 | End of the line | Let it drive off the end of a straight line | Stops within about 10 cm; Serial says "end of the line" | [ ] |
+| 5.5 | Picked up | Lift the robot during a run | Stops; Serial says "end of the line" or "line lost" | [ ] |
 | 5.6 | Instant start | Press and release | Starts the moment the button is released, no music | [ ] |
 
 ## 6. Mock competition (Friday)
