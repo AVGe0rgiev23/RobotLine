@@ -19,8 +19,8 @@
       pivots (outer track full speed, inner track backwards)
     - stops on solid black (finish area)
     - drives straight over crossings
-    - if the line is lost in a curve, spins towards the side where it was last seen
-    - stops by itself at the end of the line
+    - if the line is lost (e.g. overshot a sharp turn), it never stops: it spins
+      back towards the side the line was last clearly on, until it finds it
     - adjustable sensor timeout for a faster control loop
 
   HOW TO USE (the "user button" is the small button next to the power switch).
@@ -42,11 +42,11 @@
     4. Put the robot on the start line. Keep it switched on.
     5. START: on the judge's signal, press and release the button. The robot
        starts the instant you let go.
-    6. STOP: the robot stops by itself on SOLID BLACK (all 6 sensors black for
-       0.12 s, e.g. a finish area; crossings are too short to trigger it, and
-       a black start line under the robot is ignored), at the end of the line
-       (the line ends straight ahead), or if it loses the line in a curve and cannot find it
-       within 1.5 s. You can also press the button while it drives. It stops,
+    6. STOP: the robot stops by itself ONLY on SOLID BLACK (all 6 sensors black
+       for 0.12 s = the finish; crossings are too short to trigger it, and a
+       black start line under the robot is ignored). It never stops on white:
+       if it loses the line it spins back towards it. To stop it yourself,
+       press the button while it drives. It stops,
        beeps, and is ready again (LED on). Short press = run again with the same
        calibration. Hold 1 s = calibrate again.
     7. CHANGE MODE after calibrating: type "mode N" in the Serial Monitor
@@ -152,14 +152,11 @@ const int LOST_SPIN_SPEED = 300;     // spin speed when the line is lost
 const int EDGE_ERROR = 1800;              // |error| from here (line under an outer sensor) = sharp corner
 const unsigned long EXIT_RAMP_MS = 100;   // after the hold, speed rises back to full over this time
 
-// End of the track. If the line disappears while the robot is centred on it
-// (|error| below END_CENTER_ERROR), the line has ended straight ahead: the
-// robot keeps going straight at half speed for END_CONFIRM_MS to make sure,
-// then stops. If the line disappears off one side (overshot a curve), it spins
-// back towards it and stops only if it cannot find it within LOST_STOP_MS.
-const int END_CENTER_ERROR = 1000;         // 0..2500
-const unsigned long END_CONFIRM_MS = 100;
-const unsigned long LOST_STOP_MS = 1500;
+// Line lost (all sensors white, e.g. it overshot a sharp turn): the robot never
+// stops; it spins back towards the side the line was last clearly on.
+// "Clearly" = |error| at least SIDE_ERROR, so a nearly centred reading at high
+// speed cannot make it turn the wrong way.
+const int SIDE_ERROR = 300;          // 0..2500
 const int CALIBRATION_SPEED = 200;   // spin speed while calibrating
 // After calibrating, every sensor's black value must be at least this much
 // higher than its white value, or the calibration is refused (no line seen).
@@ -674,8 +671,7 @@ void race()
   unsigned long loops = 0;
   const int scale = batteryScalePercent();   // measured once, before the motors start
   unsigned long startedAt = millis();
-  unsigned long lostSince = 0;   // when the line disappeared (0 = line visible)
-  bool lostCentred = false;      // was the robot centred on the line when it vanished?
+  int lastSide = 1;              // side the line was last clearly on: -1 left, +1 right
   bool waitingAtCrossing = false;
   bool crossingHandled = false;
   unsigned long lastCrossingSeen = 0;
@@ -764,7 +760,6 @@ void race()
       if (atCrossing && !crossingHandled)
       {
         motors.setSpeeds(0, 0);
-        lostSince = 0;
         lastError = 0;
         crossingHandled = true;
         waitingAtCrossing = true;
@@ -774,56 +769,30 @@ void race()
 
     if (whiteCount == NUM_SENSORS)
     {
-      // 4. No line under any sensor.
-      if (lostSince == 0)
-      {
-        lostSince = millis();
-        lostCentred = abs(lastError) < END_CENTER_ERROR;
-      }
-      unsigned long lostFor = millis() - lostSince;
-
-      if (lostCentred)
-      {
-        // 4a. The line ended straight ahead: end of the track?
-        //     Keep going straight briefly; stop if it really is gone.
-        if (lostFor >= END_CONFIRM_MS)
-        {
-          motors.setSpeeds(0, 0);
-          stopReason = F("end of the line");
-          break;
-        }
-        motors.setSpeeds(top / 2, top / 2);
-      }
+      // 4. LINE LOST (e.g. overshot a sharp turn). Never stop: spin back
+      //    towards the side where the line was last clearly seen, until found.
+      if (lastSide < 0)
+        motors.setSpeeds(-spin, spin);  // line was on the left: turn left
       else
+        motors.setSpeeds(spin, -spin);  // line was on the right: turn right
+      if (m.holdMs > 0)
       {
-        // 4b. The line went off one side (overshot a curve): spin back towards it.
-        if (lostFor >= LOST_STOP_MS)
-        {
-          motors.setSpeeds(0, 0);
-          stopReason = F("line lost and not found");
-          break;
-        }
-        if (lastError < 0)
-          motors.setSpeeds(-spin, spin);  // line was left
-        else
-          motors.setSpeeds(spin, -spin);  // line was right
-        if (m.holdMs > 0)
-        {
-          cornerActive = true;            // once found again, leave the corner gently
-          cornerEnd = now + m.holdMs;
-        }
+        cornerActive = true;            // once found again, leave the corner gently
+        cornerEnd = now + m.holdMs;
       }
     }
     else if (atCrossing)
     {
       // 3. Crossing: drive straight, do not steer.
-      lostSince = 0;
       motors.setSpeeds(top, top);
     }
     else
     {
-      lostSince = 0;  // line visible
       int error = position - 2500;  // negative = line to the left
+
+      // Remember which side the line is clearly on (used if the line is lost).
+      if (error <= -SIDE_ERROR) lastSide = -1;
+      else if (error >= SIDE_ERROR) lastSide = 1;
 
       if (edge > 0 && abs(error) >= EDGE_ERROR)
       {

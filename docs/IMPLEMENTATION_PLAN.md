@@ -11,7 +11,7 @@ The race sketch now exists: `firmware/ZumoLineFollower/ZumoLineFollower.ino` (co
 | Mode selection, calibration with safety check, instant start, LED + buzzer signals | Done | Yes |
 | PD steering, Safe mode | Done | Follows the line; wobbles; tuning pending on the new Zumo |
 | Inside track reverses in tight turns, slow down in curves | Done | Not yet |
-| Straight over crossings, spin to find a lost line | Done | Lost-line spin seen; crossing not yet |
+| Straight over crossings; lost line → spin back towards the side the line was last clearly on, never stop | Done | Not yet (tests 5.3, 5.4) |
 | Pause at detected crossings in practice | Implemented | Enable `CROSSING_PRACTICE` and run test 5.1a; off by default |
 | 4 speed modes (Safe / Medium / Fast / Max) | Done | Medium/Fast/Max untested |
 | Soft start (0.15 s) | Done | Not yet |
