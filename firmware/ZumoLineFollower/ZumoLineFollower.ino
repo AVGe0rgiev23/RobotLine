@@ -103,7 +103,7 @@ const Mode DEFAULT_MODES[] = {
   {   250,      1,     4,     6,  50,           100 },   // mode 1: Safe (tested)
   {   320,      1,     4,     8,  80,           150 },   // mode 2: Medium (untested)
   {   370,      1,     4,     10, 110,          200 },   // mode 3: Fast (untested)
-  {   400,      1,     4,     12, 140,          250 },   // mode 4: Max (untested)
+  {   400,      1,     4,     12, 80,           250 },   // mode 4: Max (raced 36.6 s with slow 140; now brakes less in curves)
 };
 const int NUM_MODES = sizeof(DEFAULT_MODES) / sizeof(DEFAULT_MODES[0]);
 

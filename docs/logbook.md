@@ -8,4 +8,5 @@ One row per test (3 laps each). Change ONE number at a time. Battery set = A or 
 | 11 Nov | Safe | — | 250 | 1/4 | 12 (test) | 50 | 100 | 2000 | — | — | Follows the line but goes "crazy"; left side seems slower than right (robot partly broken). At the end of a strip it spins and comes back (line-lost search, by design). Team is getting a replacement Zumo |
 | 12 Nov | — | new alkaline | — | — | — | — | — | — | — | — | SetupCheck with brand-new AA batteries: all motor steps correct; straight-drive test (speed 200, 2 s) curves a little left = normal small motor difference. Robot OK for tuning |
 | 12 Nov | Safe | new | 250 | 1/4 | 6 | 50 | 100 | 2000 | — | — | NEW Zumo on the real track: follows the line perfectly, but too slow. Next: Medium → Fast → Max |
+| 14 Nov, race attempt 1 | Max | — | 400 | 1/4 | 12 | 140 | 250 | 2000 | 36.6 | 0 | Competition, Varna. Clean run, official time 36.6 s. Next attempts: Max with turnSlowdown 80 (brakes less in the wide U-turns); if it leaves the line in a U-turn, back to 140 |
 | | | | | | | | | | | | |
